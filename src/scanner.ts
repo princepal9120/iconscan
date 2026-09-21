@@ -171,6 +171,9 @@ function extractRefsAst(content: string, file: string): IconRef[] {
     },
     JSXMemberExpression(p) {
       recordNamespaceMember(p, file, bindings, refs)
+    },
+    TSQualifiedName(p) {
+      recordTypeMember(p, file, bindings, refs)
     }
   })
 
@@ -183,6 +186,9 @@ function recordUsageRef(
   bindings: Map<string, ImportBinding>,
   refs: IconRef[]
 ): void {
+  // A name on the right of a TSQualifiedName (`Foo` in `let x: Icons.Foo`) is
+  // part of a qualified name, not a standalone use — recordTypeMember credits it.
+  if (p.parentPath.isTSQualifiedName() && p.parentPath.node.right === p.node) return
   const localName = p.node.name
   const entry = bindings.get(localName)
   if (!entry) return
@@ -247,6 +253,36 @@ function recordNamespaceMember(
   refs.push({
     name: memberName,
     localName: `${obj.name}.${memberName}`,
+    source: entry.source,
+    file,
+    line: loc?.line ?? 0,
+    col: loc?.column ?? 0,
+    endLine: loc?.line ?? 0,
+    type: 'usage',
+    usageKind: 'member'
+  })
+}
+
+function recordTypeMember(
+  p: NodePath<t.TSQualifiedName>,
+  file: string,
+  bindings: Map<string, ImportBinding>,
+  refs: IconRef[]
+): void {
+  // `Icons.Foo` in a type position (`let x: Icons.Foo`, `as Icons.Foo`,
+  // `Array<Icons.Foo>`) is a namespace member use, like `<Icons.Foo />` in JSX.
+  const left = p.node.left
+  if (left.type !== 'Identifier') return
+  const entry = bindings.get(left.name)
+  if (!entry || entry.importKind !== 'namespace') return
+  const leftPath = p.get('left')
+  if (entry.binding && leftPath.scope.getBinding(left.name) !== entry.binding) return
+
+  const right = p.node.right
+  const loc = right.loc?.start
+  refs.push({
+    name: right.name,
+    localName: `${left.name}.${right.name}`,
     source: entry.source,
     file,
     line: loc?.line ?? 0,
@@ -332,7 +368,9 @@ function extractRefsFallback(content: string, file: string): IconRef[] {
         importKind: 'named'
       })
 
-      const useRe = new RegExp(`\\b${escapeRegExp(localName)}\\b`, 'g')
+      // `\b` misses identifiers ending in `$` (`$` is not a word char), so
+      // `Icon$()` would under-count; explicit non-identifier boundaries don't.
+      const useRe = new RegExp(`(?<![\\w$])${escapeRegExp(localName)}(?![\\w$])`, 'g')
       let um: RegExpExecArray | null
       while ((um = useRe.exec(masked))) {
         const up = indexToLineCol(lineStarts, um.index)
