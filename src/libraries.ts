@@ -1,32 +1,32 @@
-// src/libraries.ts — known icon libraries, their patterns, upgrade paths
+// src/libraries.ts — icon library catalog + verified generic/brand name data
 import type { LibraryDef } from './types.js'
 
 export const KNOWN_LIBRARIES: LibraryDef[] = [
   {
     name: 'lucide-react',
     pattern: 'lucide-react',
-    betterAlternatives: ['tabler-icons-react', 'phosphor-icons-react']
+    betterAlternatives: ['@tabler/icons-react', '@phosphor-icons/react']
   },
   {
     name: '@heroicons/react',
     pattern: '@heroicons/react',
-    betterAlternatives: ['lucide-react', 'phosphor-icons-react']
+    betterAlternatives: ['lucide-react', '@phosphor-icons/react']
   },
   {
     name: '@phosphor-icons/react',
     pattern: '@phosphor-icons/react',
-    betterAlternatives: ['tabler-icons-react', 'lucide-react']
+    betterAlternatives: ['@tabler/icons-react', 'lucide-react']
   },
   {
     name: '@tabler/icons-react',
     pattern: '@tabler/icons-react',
-    betterAlternatives: ['lucide-react', 'phosphor-icons-react']
+    betterAlternatives: ['lucide-react', '@phosphor-icons/react']
   },
   {
     name: 'react-icons',
     pattern: 'react-icons',
     isBrandSafe: true,
-    betterAlternatives: ['lucide-react', 'phosphor-icons-react', '@tabler/icons-react']
+    betterAlternatives: ['lucide-react', '@phosphor-icons/react', '@tabler/icons-react']
   },
   {
     name: '@fortawesome/react-fontawesome',
@@ -45,14 +45,10 @@ export const KNOWN_LIBRARIES: LibraryDef[] = [
     betterAlternatives: ['lucide-react', '@phosphor-icons/react']
   },
   {
-    name: 'generic-icon',
-    pattern: 'generic-icon|icon-placeholder|default-icon',
-    betterAlternatives: ['lucide-react', '@tabler/icons-react', '@phosphor-icons/react']
-  },
-  {
-    name: 'iconify',
+    name: '@iconify/react',
     pattern: '@iconify/react',
-    betterAlternatives: []
+    isBrandSafe: true,
+    betterAlternatives: ['lucide-react', '@tabler/icons-react']
   },
   {
     name: '@radix-ui/react-icons',
@@ -60,98 +56,202 @@ export const KNOWN_LIBRARIES: LibraryDef[] = [
     betterAlternatives: ['lucide-react']
   },
   {
-    name: 'bootstrap-icons',
-    pattern: 'bootstrap-icons',
-    betterAlternatives: ['@tabler/icons-react', 'lucide-react']
+    name: 'react-bootstrap-icons',
+    pattern: 'react-bootstrap-icons',
+    betterAlternatives: ['lucide-react', '@tabler/icons-react']
   }
 ]
 
-// Icon upgrade suggestions — generic → real icon mapping
-export const GENERIC_TO_REAL: Record<string, { name: string; library: string }> = {
-  'icon': { name: 'Menu', library: 'lucide-react' },
-  'default-icon': { name: 'Circle', library: 'lucide-react' },
-  'placeholder': { name: 'Image', library: 'lucide-react' },
-  'img': { name: 'Image', library: 'lucide-react' },
-  'image': { name: 'Image', library: 'lucide-react' },
-  'photo': { name: 'Camera', library: 'lucide-react' },
-  'picture': { name: 'Image', library: 'lucide-react' },
-  'dummy': { name: 'Box', library: 'lucide-react' },
-  'temp': { name: 'Clock', library: 'lucide-react' },
-  'temporary': { name: 'Clock', library: 'lucide-react' },
-  'mock': { name: 'TestTube', library: 'lucide-react' },
-  'sample': { name: 'TestTube', library: 'lucide-react' },
-  'example': { name: 'Lightbulb', library: 'lucide-react' },
-  'test': { name: 'TestTube', library: 'lucide-react' },
-  'fake': { name: 'AlertTriangle', library: 'lucide-react' },
-  'blank': { name: 'Square', library: 'lucide-react' },
-  'empty': { name: 'Package', library: 'lucide-react' },
-  'unknown': { name: 'HelpCircle', library: 'lucide-react' },
-  'fallback': { name: 'RefreshCw', library: 'lucide-react' },
-  'missing': { name: 'XCircle', library: 'lucide-react' },
-  'none': { name: 'Minus', library: 'lucide-react' },
-  'null': { name: 'Minus', library: 'lucide-react' },
-  'undefined': { name: 'HelpCircle', library: 'lucide-react' },
-  'help': { name: 'HelpCircle', library: 'lucide-react' },
-  'question': { name: 'HelpCircle', library: 'lucide-react' },
-  'info': { name: 'Info', library: 'lucide-react' },
-  'alert': { name: 'AlertTriangle', library: 'lucide-react' },
-  'logo': { name: 'Globe', library: 'lucide-react' },
-  'brand': { name: 'Building', library: 'lucide-react' },
-  'company': { name: 'Building', library: 'lucide-react' },
-  'twitter': { name: 'Twitter', library: 'lucide-react' },
-  'github': { name: 'Github', library: 'lucide-react' },
-  'discord': { name: 'MessageCircle', library: 'lucide-react' },
-  'slack': { name: 'Hash', library: 'lucide-react' },
-  'notion': { name: 'FileText', library: 'lucide-react' },
-  'figma': { name: 'Figma', library: 'lucide-react' },
-  'vercel': { name: 'Triangle', library: 'lucide-react' },
-  'stripe': { name: 'CreditCard', library: 'lucide-react' },
-  'twilio': { name: 'Phone', library: 'lucide-react' },
-  'aws': { name: 'Cloud', library: 'lucide-react' }
+// Placeholder-ish export names that signal "not a real icon choice".
+export const GENERIC_ICON_NAMES: ReadonlySet<string> = new Set([
+  'icon',
+  'default-icon',
+  'placeholder',
+  'img',
+  'image',
+  'photo',
+  'picture',
+  'dummy',
+  'temp',
+  'temporary',
+  'mock',
+  'sample',
+  'example',
+  'fake',
+  'blank',
+  'empty',
+  'unknown',
+  'fallback',
+  'missing',
+  'none',
+  'null',
+  'undefined',
+  'logo',
+  'brand',
+  'company'
+])
+
+// Generic name → verified lucide-react export (exists in lucide-react today).
+export const GENERIC_TO_REAL: Record<string, string> = {
+  'icon': 'Menu',
+  'placeholder': 'Image',
+  'image': 'Image',
+  'img': 'Image',
+  'picture': 'Image',
+  'photo': 'Camera',
+  'dummy': 'Box',
+  'temp': 'Clock',
+  'temporary': 'Clock',
+  'mock': 'Lightbulb',
+  'sample': 'Lightbulb',
+  'example': 'Lightbulb',
+  'fake': 'TriangleAlert',
+  'blank': 'Square',
+  'empty': 'Package',
+  'unknown': 'CircleHelp',
+  'fallback': 'RefreshCw',
+  'missing': 'CircleX',
+  'none': 'Minus',
+  'null': 'Minus',
+  'undefined': 'Minus',
+  'logo': 'Sparkles',
+  'brand': 'Tag',
+  'company': 'Building2'
 }
 
-// Libraries that are NOT icon libraries
-export const NON_ICON_IMPORTS = new Set([
-  'react', 'react-dom', 'react-native', 'react-native-web',
-  'next', 'next/head', 'next/image', 'next/link', 'next/router',
-  '@types', 'typescript', 'jest', 'vitest',
-  'tailwindcss', 'postcss', 'autoprefixer',
-  'radix-ui', '@radix-ui'
+export const BRAND_TOKENS: ReadonlySet<string> = new Set([
+  'twitter',
+  'x',
+  'github',
+  'gitlab',
+  'bitbucket',
+  'discord',
+  'slack',
+  'notion',
+  'figma',
+  'vercel',
+  'stripe',
+  'twilio',
+  'aws',
+  'amazon',
+  'google',
+  'apple',
+  'microsoft',
+  'meta',
+  'facebook',
+  'linkedin',
+  'youtube',
+  'instagram',
+  'tiktok',
+  'spotify',
+  'netflix',
+  'uber',
+  'airbnb',
+  'shopify',
+  'zoom',
+  'skype',
+  'telegram',
+  'whatsapp',
+  'signal',
+  'reddit',
+  'pinterest',
+  'twitch',
+  'dribbble',
+  'behance',
+  'medium',
+  'paypal',
+  'githubactions',
+  'docker',
+  'kubernetes'
 ])
-export const BRAND_LOGO_MAP: Record<string, { name: string; library: string }> = {
-  'logo': { name: 'YourBrandLogo', library: 'custom-svg' },
-  'brand': { name: 'YourBrandLogo', library: 'custom-svg' },
-  'twitter': { name: 'Twitter', library: 'lucide-react' },
-  'github': { name: 'Github', library: 'lucide-react' },
-  'discord': { name: 'MessageCircle', library: 'lucide-react' },
-  'slack': { name: 'Hash', library: 'lucide-react' },
-  'notion': { name: 'FileText', library: 'lucide-react' },
-  'figma': { name: 'Figma', library: 'lucide-react' },
-  'vercel': { name: 'Triangle', library: 'lucide-react' },
-  'stripe': { name: 'CreditCard', library: 'lucide-react' },
-  'twilio': { name: 'Phone', library: 'lucide-react' },
-  'aws': { name: 'Cloud', library: 'lucide-react' },
-  'google': { name: 'Chrome', library: 'lucide-react' },
-  'apple': { name: 'Apple', library: 'lucide-react' },
-  'microsoft': { name: 'Windows', library: 'lucide-react' },
-  'meta': { name: 'Facebook', library: 'lucide-react' },
-  'linkedin': { name: 'Linkedin', library: 'lucide-react' },
-  'youtube': { name: 'Youtube', library: 'lucide-react' },
-  'instagram': { name: 'Instagram', library: 'lucide-react' },
-  'tiktok': { name: 'Music', library: 'lucide-react' },
-  'spotify': { name: 'Music', library: 'lucide-react' },
-  'netflix': { name: 'Tv', library: 'lucide-react' },
-  'uber': { name: 'Car', library: 'lucide-react' },
-  'airbnb': { name: 'Home', library: 'lucide-react' },
-  'shopify': { name: 'ShoppingBag', library: 'lucide-react' },
-  'slack-logo': { name: 'Hash', library: 'lucide-react' },
-  'zoom': { name: 'Video', library: 'lucide-react' },
-  'skype': { name: 'Phone', library: 'lucide-react' },
-  'telegram': { name: 'Send', library: 'lucide-react' },
-  'whatsapp': { name: 'MessageCircle', library: 'lucide-react' },
-  'signal': { name: 'Radio', library: 'lucide-react' },
-  'figma-logo': { name: 'Figma', library: 'lucide-react' },
-  'github-logo': { name: 'Github', library: 'lucide-react' },
-  'gitlab': { name: 'GitBranch', library: 'lucide-react' },
-  'bitbucket': { name: 'GitBranch', library: 'lucide-react' }
+
+// Brand slug → real Simple Icons export (react-icons/si).
+export const BRAND_TO_SIMPLE: Record<string, { name: string; library: 'react-icons/si' }> = {
+  'twitter': { name: 'SiX', library: 'react-icons/si' },
+  'x': { name: 'SiX', library: 'react-icons/si' },
+  'github': { name: 'SiGithub', library: 'react-icons/si' },
+  'gitlab': { name: 'SiGitlab', library: 'react-icons/si' },
+  'bitbucket': { name: 'SiBitbucket', library: 'react-icons/si' },
+  'discord': { name: 'SiDiscord', library: 'react-icons/si' },
+  'slack': { name: 'SiSlack', library: 'react-icons/si' },
+  'notion': { name: 'SiNotion', library: 'react-icons/si' },
+  'figma': { name: 'SiFigma', library: 'react-icons/si' },
+  'vercel': { name: 'SiVercel', library: 'react-icons/si' },
+  'stripe': { name: 'SiStripe', library: 'react-icons/si' },
+  'twilio': { name: 'SiTwilio', library: 'react-icons/si' },
+  'aws': { name: 'SiAmazonaws', library: 'react-icons/si' },
+  'amazon': { name: 'SiAmazon', library: 'react-icons/si' },
+  'google': { name: 'SiGoogle', library: 'react-icons/si' },
+  'apple': { name: 'SiApple', library: 'react-icons/si' },
+  'microsoft': { name: 'SiMicrosoft', library: 'react-icons/si' },
+  'meta': { name: 'SiMeta', library: 'react-icons/si' },
+  'facebook': { name: 'SiFacebook', library: 'react-icons/si' },
+  'linkedin': { name: 'SiLinkedin', library: 'react-icons/si' },
+  'youtube': { name: 'SiYoutube', library: 'react-icons/si' },
+  'instagram': { name: 'SiInstagram', library: 'react-icons/si' },
+  'tiktok': { name: 'SiTiktok', library: 'react-icons/si' },
+  'spotify': { name: 'SiSpotify', library: 'react-icons/si' },
+  'netflix': { name: 'SiNetflix', library: 'react-icons/si' },
+  'uber': { name: 'SiUber', library: 'react-icons/si' },
+  'airbnb': { name: 'SiAirbnb', library: 'react-icons/si' },
+  'shopify': { name: 'SiShopify', library: 'react-icons/si' },
+  'zoom': { name: 'SiZoom', library: 'react-icons/si' },
+  'skype': { name: 'SiSkype', library: 'react-icons/si' },
+  'telegram': { name: 'SiTelegram', library: 'react-icons/si' },
+  'whatsapp': { name: 'SiWhatsapp', library: 'react-icons/si' },
+  'signal': { name: 'SiSignal', library: 'react-icons/si' },
+  'reddit': { name: 'SiReddit', library: 'react-icons/si' },
+  'pinterest': { name: 'SiPinterest', library: 'react-icons/si' },
+  'twitch': { name: 'SiTwitch', library: 'react-icons/si' },
+  'dribbble': { name: 'SiDribbble', library: 'react-icons/si' },
+  'behance': { name: 'SiBehance', library: 'react-icons/si' },
+  'medium': { name: 'SiMedium', library: 'react-icons/si' },
+  'paypal': { name: 'SiPaypal', library: 'react-icons/si' },
+  'githubactions': { name: 'SiGithubactions', library: 'react-icons/si' },
+  'docker': { name: 'SiDocker', library: 'react-icons/si' },
+  'kubernetes': { name: 'SiKubernetes', library: 'react-icons/si' }
+}
+
+// Vendor prefixes used by react-icons-style exports (FaGithub, SiX, ...).
+// Longest-first so Io5/Hi2/Fa6/Tfi/Lia/Vsc win over their 2-char heads.
+const ICON_NAME_PREFIXES = [
+  'Io5', 'Hi2', 'Fa6', 'Lia', 'Tfi', 'Vsc',
+  'Fa', 'Si', 'Io', 'Tb', 'Fi', 'Bi', 'Rx', 'Lu', 'Hi', 'Pi', 'Md',
+  'Gr', 'Ri', 'Bs', 'Ai', 'Ci', 'Cg', 'Di', 'Go', 'Im', 'Sl', 'Ti', 'Wi'
+]
+
+// Strips a known vendor prefix, then splits on camelCase, digits, and -/_.
+export function tokenizeIconName(name: string): string[] {
+  let stem = name
+  for (const prefix of ICON_NAME_PREFIXES) {
+    if (
+      stem.length > prefix.length &&
+      stem.startsWith(prefix) &&
+      /[A-Z]/.test(stem[prefix.length])
+    ) {
+      stem = stem.slice(prefix.length)
+      break
+    }
+  }
+  return stem
+    .split(/[-_\s]+/)
+    .flatMap(seg =>
+      seg.split(
+        /(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[A-Za-z])(?=\d)|(?<=\d)(?=[A-Za-z])/
+      )
+    )
+    .filter(Boolean)
+    .map(token => token.toLowerCase())
+}
+
+// Brand detection: first token is a brand slug, or the whole tokenized name
+// joined back together is a brand slug. Tokens are matched whole — 'awesome'
+// never hits 'aws'.
+export function detectBrand(name: string): string | null {
+  const tokens = tokenizeIconName(name)
+  if (tokens.length === 0) return null
+  if (BRAND_TOKENS.has(tokens[0])) return tokens[0]
+  const slug = tokens.join('')
+  if (BRAND_TOKENS.has(slug)) return slug
+  return null
 }
