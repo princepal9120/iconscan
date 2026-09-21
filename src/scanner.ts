@@ -317,8 +317,68 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-const FALLBACK_IMPORT_RE = /\bimport\s*(?:type\s+)?\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/g
+// The clause group captures everything between `import [type]` and `from`,
+// covering `import { A }`, `import D`, `import * as NS`, `import D, { A }`,
+// `import D, * as NS` and multiline variants.
+const FALLBACK_IMPORT_RE = /\bimport\s*(?:type\s+)?([\s\S]*?)\s*\bfrom\s*['"]([^'"]+)['"]/g
+const FALLBACK_HEAD_RE = /^import\s*(?:type\s+)?/
 const FALLBACK_SPEC_RE = /^(?:type\s+)?(?:["']([^"']+)["']|([A-Za-z_$][\w$]*))(?:\s+as\s+([A-Za-z_$][\w$]*))?$/
+const FALLBACK_NS_RE = /^\*\s*as\s+([A-Za-z_$][\w$]*)$/
+const FALLBACK_DEFAULT_RE = /^([A-Za-z_$][\w$]*)$/
+// A real import clause only contains identifiers, braces, `*`, commas, quotes
+// and whitespace — parens/semicolons/operators mean the "clause" is code
+// sitting between an `import()` call and a later `from` (e.g. a re-export).
+const FALLBACK_CLAUSE_RE = /^[\w$*{}\s,'"`-]*$/
+
+interface FallbackSpec {
+  exportedName: string
+  localName: string
+  importKind: 'named' | 'default' | 'namespace'
+  index: number // absolute offset of the specifier text in the file
+}
+
+// Parses the comma-separated clause segments outside `{ ... }`: a bare
+// identifier is a default import, `* as NS` is a namespace import.
+function collectOuterSpecs(segment: string, segStart: number, specs: FallbackSpec[]): void {
+  let cursor = 0
+  for (const piece of segment.split(',')) {
+    const pieceAt = segment.indexOf(piece, cursor)
+    if (pieceAt === -1) break
+    cursor = pieceAt + piece.length
+    const trimmed = piece.trim()
+    if (!trimmed) continue
+    const index = segStart + pieceAt + (piece.length - piece.trimStart().length)
+    const ns = FALLBACK_NS_RE.exec(trimmed)
+    if (ns) {
+      specs.push({ exportedName: ns[1], localName: ns[1], importKind: 'namespace', index })
+      continue
+    }
+    const def = FALLBACK_DEFAULT_RE.exec(trimmed)
+    if (def) {
+      specs.push({ exportedName: def[1], localName: def[1], importKind: 'default', index })
+    }
+  }
+}
+
+function collectNamedSpecs(inner: string, innerStart: number, specs: FallbackSpec[]): void {
+  let cursor = 0
+  for (const piece of inner.split(',')) {
+    const pieceAt = inner.indexOf(piece, cursor)
+    if (pieceAt === -1) break
+    cursor = pieceAt + piece.length
+    const sm = FALLBACK_SPEC_RE.exec(piece.trim())
+    if (!sm) continue
+    const exportedName = sm[1] ?? sm[2]
+    const localName = sm[3] ?? sm[2]
+    if (!exportedName || !localName) continue
+    specs.push({
+      exportedName,
+      localName,
+      importKind: 'named',
+      index: innerStart + pieceAt + (piece.length - piece.trimStart().length)
+    })
+  }
+}
 
 function extractRefsFallback(content: string, file: string): IconRef[] {
   const refs: IconRef[] = []
@@ -327,56 +387,57 @@ function extractRefsFallback(content: string, file: string): IconRef[] {
   let m: RegExpExecArray | null
 
   while ((m = importRe.exec(content))) {
+    const clause = m[1]
     const source = m[2]
+    if (!FALLBACK_CLAUSE_RE.test(clause)) continue
     if (isSkippedSource(source)) continue
 
     const stmtStart = m.index
     const stmtEnd = m.index + m[0].length
     const endPos = indexToLineCol(lineStarts, stmtEnd - 1)
-    const inner = m[1]
-    const innerStart = stmtStart + m[0].indexOf('{') + 1
+    const head = FALLBACK_HEAD_RE.exec(m[0])
+    const clauseStart = stmtStart + (head ? head[0].length : 0)
     // Mask the import statement so usage matches only count occurrences outside it.
     const masked =
       content.slice(0, stmtStart) +
       m[0].replace(/[^\n]/g, ' ') +
       content.slice(stmtEnd)
 
-    let cursor = 0
-    for (const piece of inner.split(',')) {
-      const pieceAt = inner.indexOf(piece, cursor)
-      if (pieceAt === -1) break
-      cursor = pieceAt + piece.length
-      const sm = FALLBACK_SPEC_RE.exec(piece.trim())
-      if (!sm) continue
-      const exportedName = sm[1] ?? sm[2]
-      const localName = sm[3] ?? sm[2]
-      if (!exportedName || !localName) continue
+    const specs: FallbackSpec[] = []
+    const braceIdx = clause.indexOf('{')
+    if (braceIdx === -1) {
+      collectOuterSpecs(clause, clauseStart, specs)
+    } else {
+      const braceEnd = clause.indexOf('}', braceIdx + 1)
+      if (braceEnd === -1) continue
+      collectOuterSpecs(clause.slice(0, braceIdx), clauseStart, specs)
+      collectNamedSpecs(clause.slice(braceIdx + 1, braceEnd), clauseStart + braceIdx + 1, specs)
+      collectOuterSpecs(clause.slice(braceEnd + 1), clauseStart + braceEnd + 1, specs)
+    }
 
-      const specPos = indexToLineCol(
-        lineStarts,
-        innerStart + pieceAt + piece.length - piece.trimStart().length
-      )
+    for (const spec of specs) {
+      const specPos = indexToLineCol(lineStarts, spec.index)
       refs.push({
-        name: exportedName,
-        localName,
+        name: spec.exportedName,
+        localName: spec.localName,
         source,
         file,
         line: specPos.line,
         col: specPos.col,
         endLine: endPos.line,
         type: 'import',
-        importKind: 'named'
+        importKind: spec.importKind
       })
 
       // `\b` misses identifiers ending in `$` (`$` is not a word char), so
       // `Icon$()` would under-count; explicit non-identifier boundaries don't.
-      const useRe = new RegExp(`(?<![\\w$])${escapeRegExp(localName)}(?![\\w$])`, 'g')
+      const useRe = new RegExp(`(?<![\\w$])${escapeRegExp(spec.localName)}(?![\\w$])`, 'g')
       let um: RegExpExecArray | null
       while ((um = useRe.exec(masked))) {
         const up = indexToLineCol(lineStarts, um.index)
         refs.push({
-          name: exportedName,
-          localName,
+          name: spec.exportedName,
+          localName: spec.localName,
           source,
           file,
           line: up.line,

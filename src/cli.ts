@@ -54,7 +54,7 @@ program
     // Run scan
     console.log(`Scanning ${rootPath}...`)
 
-    const { refs, files } = await scanProject(rootPath)
+    const { refs } = await scanProject(rootPath)
     const { issues, stats } = analyze(refs)
     const score = computeScore(stats, issues)
 

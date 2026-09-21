@@ -5,85 +5,63 @@ export const KNOWN_LIBRARIES: LibraryDef[] = [
   {
     name: 'lucide-react',
     pattern: 'lucide-react',
-    iconPattern: /\b[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
     betterAlternatives: ['tabler-icons-react', 'phosphor-icons-react']
   },
   {
     name: '@heroicons/react',
     pattern: '@heroicons/react',
-    iconPattern: /\b[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
     betterAlternatives: ['lucide-react', 'phosphor-icons-react']
   },
   {
     name: '@phosphor-icons/react',
     pattern: '@phosphor-icons/react',
-    iconPattern: /\b[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
     betterAlternatives: ['tabler-icons-react', 'lucide-react']
   },
   {
     name: '@tabler/icons-react',
     pattern: '@tabler/icons-react',
-    iconPattern: /\b[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
     betterAlternatives: ['lucide-react', 'phosphor-icons-react']
   },
   {
     name: 'react-icons',
     pattern: 'react-icons',
-    iconPattern: /\b[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
+    isBrandSafe: true,
     betterAlternatives: ['lucide-react', 'phosphor-icons-react', '@tabler/icons-react']
   },
   {
     name: '@fortawesome/react-fontawesome',
     pattern: '@fortawesome',
-    iconPattern: /\bfa[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
+    isBrandSafe: true,
     betterAlternatives: ['lucide-react', '@tabler/icons-react']
   },
   {
     name: '@mui/icons-material',
     pattern: '@mui/icons-material',
-    iconPattern: /\b[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
     betterAlternatives: ['@tabler/icons-react', 'lucide-react']
   },
   {
     name: 'react-feather',
     pattern: 'react-feather',
-    iconPattern: /\b[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
     betterAlternatives: ['lucide-react', '@phosphor-icons/react']
   },
   {
     name: 'generic-icon',
     pattern: 'generic-icon|icon-placeholder|default-icon',
-    iconPattern: /.*/,
-    isGeneric: true,
     betterAlternatives: ['lucide-react', '@tabler/icons-react', '@phosphor-icons/react']
   },
   {
     name: 'iconify',
     pattern: '@iconify/react',
-    iconPattern: /\b[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
     betterAlternatives: []
   },
   {
     name: '@radix-ui/react-icons',
     pattern: '@radix-ui/react-icons',
-    iconPattern: /\b[A-Z][a-zA-Z0-9]+\b/,
-    isGeneric: false,
     betterAlternatives: ['lucide-react']
   },
   {
     name: 'bootstrap-icons',
     pattern: 'bootstrap-icons',
-    iconPattern: /\bbi-[a-z0-9-]+\b/i,
-    isGeneric: false,
     betterAlternatives: ['@tabler/icons-react', 'lucide-react']
   }
 ]
