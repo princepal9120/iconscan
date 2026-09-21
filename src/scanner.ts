@@ -1,157 +1,352 @@
-// src/scanner.ts — icon extraction
+// src/scanner.ts — AST-based icon extraction
 import { glob } from 'glob'
 import fs from 'fs'
 import path from 'path'
-import type { IconRef } from './types.js'
+import { parse } from '@babel/parser'
+import babelTraverse from '@babel/traverse'
+import type { Binding, NodePath } from '@babel/traverse'
+import type * as t from '@babel/types'
+import type { IconRef, IconUsageKind, LibraryDef, ScanOutput } from './types.js'
 import { KNOWN_LIBRARIES } from './libraries.js'
 
-export interface FileInfo {
-  path: string
-  content: string
-  lines: string[]
+// @babel/traverse is CommonJS: under Node ESM the default import resolves to
+// module.exports, whose .default is the traverse function. Normalize both shapes.
+const traverse: typeof babelTraverse =
+  typeof babelTraverse === 'function'
+    ? babelTraverse
+    : (babelTraverse as unknown as { default: typeof babelTraverse }).default
+
+const FILE_GLOB = '**/*.{js,jsx,ts,tsx,mjs,cjs}'
+
+const DEFAULT_IGNORES = [
+  '**/node_modules/**',
+  '**/.next/**',
+  '**/.git/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/out/**',
+  '**/coverage/**',
+  '**/*.test.*',
+  '**/*.spec.*',
+  '**/*.stories.*',
+  '**/*.d.ts',
+  '**/*.config.*'
+]
+
+const NODE_BUILTINS = new Set([
+  'assert', 'async_hooks', 'buffer', 'child_process', 'cluster', 'console',
+  'constants', 'crypto', 'dgram', 'diagnostics_channel', 'dns', 'domain',
+  'events', 'fs', 'http', 'http2', 'https', 'inspector', 'module', 'net',
+  'os', 'path', 'perf_hooks', 'process', 'punycode', 'querystring',
+  'readline', 'repl', 'stream', 'string_decoder', 'sys', 'timers', 'tls',
+  'tty', 'url', 'util', 'v8', 'vm', 'wasi', 'worker_threads', 'zlib'
+])
+
+function isSkippedSource(source: string): boolean {
+  if (source.startsWith('node:')) return true
+  const base = source.split('/')[0]
+  if (NODE_BUILTINS.has(source) || NODE_BUILTINS.has(base)) return true
+  if (source === 'react' || source.startsWith('react/')) return true
+  if (source === 'react-dom' || source.startsWith('react-dom/')) return true
+  if (source === 'react-native' || source.startsWith('react-native/')) return true
+  if (source === 'next' || source.startsWith('next/')) return true
+  return false
 }
 
-export async function scanProject(rootPath: string): Promise<{ refs: IconRef[]; files: FileInfo[] }> {
-  const refs: IconRef[] = []
-  const files: FileInfo[] = []
+export function resolveLibrary(source: string): LibraryDef | undefined {
+  return (
+    KNOWN_LIBRARIES.find(lib => lib.pattern === source) ??
+    KNOWN_LIBRARIES.find(lib => source.startsWith(lib.pattern + '/'))
+  )
+}
 
-  const allFiles = await glob('**/*.{js,jsx,ts,tsx}', {
+export async function scanProject(rootPath: string, exclude: string[] = []): Promise<ScanOutput> {
+  const refs: IconRef[] = []
+  const parseErrors: { file: string; error: string }[] = []
+  let filesScanned = 0
+
+  const files = await glob(FILE_GLOB, {
     cwd: rootPath,
-    ignore: [
-      'node_modules/**', '.next/**', '.git/**', 'dist/**', 'build/**',
-      '**/*.test.{js,jsx,ts,tsx}', '**/*.spec.{js,jsx,ts,tsx}',
-      '**/*.stories.{js,jsx,ts,tsx}', '**/*.d.ts', '**/*.config.{js,ts,mjs,cjs}'
-    ],
+    ignore: [...DEFAULT_IGNORES, ...exclude],
     absolute: false,
-    dot: false
+    dot: false,
+    nodir: true
   })
 
-  for (const relativePath of allFiles) {
-    const fullPath = path.join(rootPath, relativePath)
+  for (const file of files.sort()) {
+    const fullPath = path.join(rootPath, file)
+    let content: string
     try {
-      const content = fs.readFileSync(fullPath, 'utf-8')
-      if (content.includes('iconscan:skip')) continue
-      const lines = content.split('\n')
-      const fileRefs = extractIconsFromFile(content, relativePath)
-      if (fileRefs.length > 0) {
-        refs.push(...fileRefs)
-        files.push({ path: relativePath, content, lines })
-      }
-    } catch { /* skip */ }
+      content = fs.readFileSync(fullPath, 'utf-8')
+    } catch {
+      continue
+    }
+    if (content.includes('iconscan:skip')) continue
+    filesScanned++
+
+    try {
+      refs.push(...extractRefsAst(content, file))
+    } catch (err) {
+      parseErrors.push({ file, error: String(err).slice(0, 200) })
+      refs.push(...extractRefsFallback(content, file))
+    }
   }
 
-  return { refs, files }
+  refs.sort(compareRefs)
+  parseErrors.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0))
+  return { refs, filesScanned, parseErrors }
 }
 
-function extractIconsFromFile(source: string, filePath: string): IconRef[] {
-  // Phase 1: Find icon imports
-  const importsBySource = findIconImports(source, filePath)
+interface ImportBinding {
+  exportedName: string
+  source: string
+  importKind: 'named' | 'default' | 'namespace'
+  binding?: Binding
+}
 
-  // Phase 2: Find JSX usage of imported icons
-  const jsxRefs = findJSXUsage(source, filePath, importsBySource)
+type IdentifierPath = NodePath<t.Identifier> | NodePath<t.JSXIdentifier>
 
-  // Combine (imports + jsx)
-  const allRefs: IconRef[] = [...importsBySource.refs, ...jsxRefs]
+function extractRefsAst(content: string, file: string): IconRef[] {
+  const ast = parse(content, {
+    sourceType: 'unambiguous',
+    plugins: ['jsx', 'typescript'],
+    errorRecovery: true,
+    allowImportExportEverywhere: true
+  })
 
-  // Deduplicate
-  const seen = new Set<string>()
-  return allRefs.filter(ref => {
-    const key = `${ref.name}|${ref.source}|${ref.file}|${ref.line}|${ref.type}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
+  const refs: IconRef[] = []
+  const bindings = new Map<string, ImportBinding>()
+
+  traverse(ast, {
+    ImportDeclaration(p) {
+      const source = p.node.source.value
+      if (isSkippedSource(source)) return
+      const stmtEndLine = p.node.loc?.end.line ?? p.node.loc?.start.line ?? 0
+      for (const spec of p.node.specifiers) {
+        const localName = spec.local.name
+        let exportedName: string
+        let importKind: ImportBinding['importKind']
+        if (spec.type === 'ImportSpecifier') {
+          exportedName =
+            spec.imported.type === 'Identifier' ? spec.imported.name : spec.imported.value
+          importKind = 'named'
+        } else if (spec.type === 'ImportDefaultSpecifier') {
+          exportedName = localName
+          importKind = 'default'
+        } else {
+          exportedName = localName
+          importKind = 'namespace'
+        }
+        const loc = spec.loc?.start ?? p.node.loc?.start
+        refs.push({
+          name: exportedName,
+          localName,
+          source,
+          file,
+          line: loc?.line ?? 0,
+          col: loc?.column ?? 0,
+          endLine: stmtEndLine,
+          type: 'import',
+          importKind
+        })
+        bindings.set(localName, {
+          exportedName,
+          source,
+          importKind,
+          binding: p.scope.getBinding(localName)
+        })
+      }
+    }
+  })
+
+  traverse(ast, {
+    Identifier(p) {
+      recordUsageRef(p, file, bindings, refs)
+    },
+    JSXIdentifier(p) {
+      recordUsageRef(p, file, bindings, refs)
+    },
+    MemberExpression(p) {
+      recordNamespaceMember(p, file, bindings, refs)
+    },
+    JSXMemberExpression(p) {
+      recordNamespaceMember(p, file, bindings, refs)
+    }
+  })
+
+  return refs
+}
+
+function recordUsageRef(
+  p: IdentifierPath,
+  file: string,
+  bindings: Map<string, ImportBinding>,
+  refs: IconRef[]
+): void {
+  const localName = p.node.name
+  const entry = bindings.get(localName)
+  if (!entry) return
+  // Declaration sites, property keys, labels and import specifiers are not uses.
+  if (!p.isReferenced()) return
+  if (entry.binding && p.scope.getBinding(localName) !== entry.binding) return
+  // A JSX element is one usage: skip the identifier inside its closing tag.
+  const jsxAncestor = p.findParent(a => a.isJSXOpeningElement() || a.isJSXClosingElement())
+  if (jsxAncestor?.isJSXClosingElement()) return
+
+  const loc = p.node.loc?.start
+  refs.push({
+    name: entry.exportedName,
+    localName,
+    source: entry.source,
+    file,
+    line: loc?.line ?? 0,
+    col: loc?.column ?? 0,
+    endLine: loc?.line ?? 0,
+    type: 'usage',
+    usageKind: classifyUsageKind(p)
   })
 }
 
-interface ImportResult {
+function classifyUsageKind(p: IdentifierPath): IconUsageKind {
+  const parent = p.parentPath
+  if (parent.isJSXOpeningElement() && parent.node.name === p.node) return 'jsx'
+  if (parent.isJSXMemberExpression() && parent.node.object === p.node) return 'member'
+  return 'reference'
+}
+
+function recordNamespaceMember(
+  p: NodePath<t.MemberExpression> | NodePath<t.JSXMemberExpression>,
+  file: string,
+  bindings: Map<string, ImportBinding>,
   refs: IconRef[]
-  importedNames: Set<string>      // names we know are icons
-  importedByLib: Map<string, string>  // name → library
+): void {
+  const obj = p.node.object
+  if (obj.type !== 'Identifier' && obj.type !== 'JSXIdentifier') return
+  const entry = bindings.get(obj.name)
+  if (!entry || entry.importKind !== 'namespace') return
+  const objPath = p.get('object')
+  if (entry.binding && objPath.scope.getBinding(obj.name) !== entry.binding) return
+  const jsxAncestor = p.findParent(a => a.isJSXOpeningElement() || a.isJSXClosingElement())
+  if (jsxAncestor?.isJSXClosingElement()) return
+
+  const prop = p.node.property
+  let memberName: string | undefined
+  let propNode: t.Node | undefined
+  if (prop.type === 'Identifier' || prop.type === 'JSXIdentifier') {
+    // NS[expr] dereferences a computed key, not a named member.
+    if (p.node.type === 'MemberExpression' && p.node.computed) return
+    memberName = prop.name
+    propNode = prop
+  } else if (p.node.type === 'MemberExpression' && p.node.computed && prop.type === 'StringLiteral') {
+    memberName = prop.value
+    propNode = prop
+  }
+  if (!memberName || !propNode) return
+
+  const loc = propNode.loc?.start
+  refs.push({
+    name: memberName,
+    localName: `${obj.name}.${memberName}`,
+    source: entry.source,
+    file,
+    line: loc?.line ?? 0,
+    col: loc?.column ?? 0,
+    endLine: loc?.line ?? 0,
+    type: 'usage',
+    usageKind: 'member'
+  })
 }
 
-function findIconImports(source: string, filePath: string): ImportResult {
-  const refs: IconRef[] = []
-  const importedNames = new Set<string>()
-  const importedByLib = new Map<string, string>()
-
-  // Skip entire react/* package - none of its exports are icons
-  const importRegex = /import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]/g
-  let match: RegExpExecArray | null
-
-  while ((match = importRegex.exec(source)) !== null) {
-    const importList = match[1]
-    const sourceValue = match[2]
-
-    // Skip react and all its submodules
-    if (sourceValue === 'react' || sourceValue.startsWith('react/')) continue
-
-    const lib = KNOWN_LIBRARIES.find(l =>
-      sourceValue === l.pattern || sourceValue.includes(l.pattern) || l.pattern.includes(sourceValue)
-    )
-    if (!lib) continue
-
-    const names = importList.split(',').map(s => s.trim().split(/\s+as\s+/).pop()?.trim() ?? '')
-    const line = source.substring(0, match.index).split('\n').length
-
-    for (const name of names) {
-      const cleanName = name.replace(/['"]/g, '').trim()
-      if (!cleanName || !isLikelyIconName(cleanName)) continue
-
-      importedNames.add(cleanName)
-      importedByLib.set(cleanName, sourceValue)
-      refs.push({ name: cleanName, source: sourceValue, file: filePath, line, type: 'import' })
-    }
+// Line/col helpers for the regex fallback path.
+function computeLineStarts(content: string): number[] {
+  const starts = [0]
+  for (let i = 0; i < content.length; i++) {
+    if (content.charCodeAt(i) === 10) starts.push(i + 1)
   }
-
-  return { refs, importedNames, importedByLib }
+  return starts
 }
 
-function findJSXUsage(source: string, filePath: string, imports: ImportResult): IconRef[] {
+function indexToLineCol(lineStarts: number[], index: number): { line: number; col: number } {
+  let lo = 0
+  let hi = lineStarts.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (lineStarts[mid] <= index) lo = mid
+    else hi = mid - 1
+  }
+  return { line: lo + 1, col: index - lineStarts[lo] }
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+const FALLBACK_IMPORT_RE = /\bimport\s*(?:type\s+)?\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/g
+const FALLBACK_SPEC_RE = /^(?:type\s+)?(?:["']([^"']+)["']|([A-Za-z_$][\w$]*))(?:\s+as\s+([A-Za-z_$][\w$]*))?$/
+
+function extractRefsFallback(content: string, file: string): IconRef[] {
   const refs: IconRef[] = []
+  const lineStarts = computeLineStarts(content)
+  const importRe = new RegExp(FALLBACK_IMPORT_RE)
+  let m: RegExpExecArray | null
 
-  // Match ALL capitalized JSX tags, filter by known imports
-  const jsxRegex = /<([A-Z][a-zA-Z0-9]+)\b/g
-  let match: RegExpExecArray | null
+  while ((m = importRe.exec(content))) {
+    const source = m[2]
+    if (isSkippedSource(source)) continue
 
-  while ((match = jsxRegex.exec(source)) !== null) {
-    const name = match[1]
+    const stmtStart = m.index
+    const stmtEnd = m.index + m[0].length
+    const endPos = indexToLineCol(lineStarts, stmtEnd - 1)
+    const inner = m[1]
+    const innerStart = stmtStart + m[0].indexOf('{') + 1
+    // Mask the import statement so usage matches only count occurrences outside it.
+    const masked =
+      content.slice(0, stmtStart) +
+      m[0].replace(/[^\n]/g, ' ') +
+      content.slice(stmtEnd)
 
-    // Only match if we have this as an imported icon
-    if (!imports.importedNames.has(name)) continue
+    let cursor = 0
+    for (const piece of inner.split(',')) {
+      const pieceAt = inner.indexOf(piece, cursor)
+      if (pieceAt === -1) break
+      cursor = pieceAt + piece.length
+      const sm = FALLBACK_SPEC_RE.exec(piece.trim())
+      if (!sm) continue
+      const exportedName = sm[1] ?? sm[2]
+      const localName = sm[3] ?? sm[2]
+      if (!exportedName || !localName) continue
 
-    // Skip obvious non-icon patterns after the tag name
-    const afterTag = source.substring(match.index + match[0].length)
-    if (/^\s*[,)>]/.test(afterTag) && !afterTag.startsWith('/')) continue
+      const specPos = indexToLineCol(
+        lineStarts,
+        innerStart + pieceAt + piece.length - piece.trimStart().length
+      )
+      refs.push({
+        name: exportedName,
+        localName,
+        source,
+        file,
+        line: specPos.line,
+        col: specPos.col,
+        endLine: endPos.line,
+        type: 'import',
+        importKind: 'named'
+      })
 
-    const line = source.substring(0, match.index).split('\n').length
-    const sourceValue = imports.importedByLib.get(name) ?? 'unknown'
-
-    refs.push({ name, source: sourceValue, file: filePath, line, type: 'jsx' })
-  }
-
-  // Detect icon usage as object property values: { icon: Sun } or { logo: Monitor }
-  const objRegex = /\{\s*(?:icon|Icon|logo|Logo|symbol|Symbol)\s*:\s*([A-Z][a-zA-Z0-9]+)\s*\}/g
-  let objMatch: RegExpExecArray | null
-  while ((objMatch = objRegex.exec(source)) !== null) {
-    const name = objMatch[1]
-    if (imports.importedNames.has(name)) {
-      const line = source.substring(0, objMatch.index).split('\n').length
-      const sourceValue = imports.importedByLib.get(name) ?? 'unknown'
-      refs.push({ name, source: sourceValue, file: filePath, line, type: 'function-call' })
-    }
-  }
-
-  // Detect icon usage in arrays: icons: [Sun, Moon, Star]
-  const arrayRegex = /(?:icons|Icons|iconSet|logos)\s*:\s*\[([^\]]+)\]/g
-  let arrayMatch: RegExpExecArray | null
-  while ((arrayMatch = arrayRegex.exec(source)) !== null) {
-    const items = arrayMatch[1].split(',').map(s => s.trim())
-    for (const item of items) {
-      const name = item.replace(/['"]/g, '').trim()
-      if (imports.importedNames.has(name)) {
-        const line = source.substring(0, arrayMatch.index).split('\n').length
-        const sourceValue = imports.importedByLib.get(name) ?? 'unknown'
-        refs.push({ name, source: sourceValue, file: filePath, line, type: 'function-call' })
+      const useRe = new RegExp(`\\b${escapeRegExp(localName)}\\b`, 'g')
+      let um: RegExpExecArray | null
+      while ((um = useRe.exec(masked))) {
+        const up = indexToLineCol(lineStarts, um.index)
+        refs.push({
+          name: exportedName,
+          localName,
+          source,
+          file,
+          line: up.line,
+          col: up.col,
+          endLine: up.line,
+          type: 'usage',
+          usageKind: 'reference'
+        })
       }
     }
   }
@@ -159,17 +354,7 @@ function findJSXUsage(source: string, filePath: string, imports: ImportResult): 
   return refs
 }
 
-function isLikelyIconName(name: string): boolean {
-  if (!name || name.length < 2 || name[0] !== name[0].toUpperCase()) return false
-
-  // Skip React built-in patterns
-  if (/^(use|with|create|make|build|is|get|set|can|should|will|did|handle|on)[A-Z]/.test(name)) return false
-  if (/^(Component|Provider|Context|Consumer|Router|Route|Link|NavLink|Fragment|Suspense|Portal|Profiler|StrictMode|createElement|cloneElement|isValidElement|createContext|createRef|lazy|memo|forwardRef|useState|useEffect|useMemo|useCallback|useRef|useContext|useReducer|useLayoutEffect|useImperativeHandle|useDebugValue)$/.test(name)) return false
-  if (/^(div|span|section|article|header|footer|main|nav|aside|h[1-6]|p|ul|ol|li|table|tr|td|th|form|input|button|label|select|textarea|img|video|audio|canvas|svg|iframe)$/.test(name)) return false
-  if (/^(ReactNode|ReactElement|ReactChild|ReactFragment|ComponentType|FC|FunctionComponent|VFC|Ref|RefObject|MutableRefObject|CSSProperties|HTMLElement|HTMLDivElement|HTMLButtonElement|HTMLInputElement|SyntheticEvent|MouseEvent|KeyboardEvent|ChangeEvent|TouchEvent|AnimationEvent|TransitionEvent|ClipboardEvent|FocusEvent|WheelEvent|PointerEvent|UIEvent)$/.test(name)) return false
-
-  // Skip common non-icon imports
-  if (/^(cn|clsx|twMerge|cva|axios|fetch|lodash|moment|dayjs|uuid|classnames|shallowequal|fast-deep-equal|nanoid|invariant|warning|is-plain-object|isobject|isarray|is-string|is-number|is-boolean|is-function|is-date|is-regex|is-symbol|is-null|is-undefined|is-empty|is-equal|is-match|is-mergeable|is-plain-object)$/.test(name)) return false
-
-  return true
+function compareRefs(a: IconRef, b: IconRef): number {
+  if (a.file !== b.file) return a.file < b.file ? -1 : 1
+  return a.line - b.line || a.col - b.col
 }
