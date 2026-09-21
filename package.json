@@ -1,0 +1,27 @@
+{
+  "name": "iconscan",
+  "version": "0.1.0",
+  "description": "Deterministic icon audit for React / Next.js / TypeScript projects. Score, find dead icons, recommend alternatives.",
+  "type": "module",
+  "bin": {
+    "iconscan": "./dist/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsup src/cli.ts --format esm --target node18 --minify",
+    "start": "node dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.24.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "glob": "^10.0.0"
+  }
+}

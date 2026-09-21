@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.iconscan.bak
+.DS_Store
+data/
