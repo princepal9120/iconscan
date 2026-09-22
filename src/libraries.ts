@@ -244,14 +244,27 @@ export function tokenizeIconName(name: string): string[] {
     .map(token => token.toLowerCase())
 }
 
-// Brand detection: first token is a brand slug, or the whole tokenized name
-// joined back together is a brand slug. Tokens are matched whole — 'awesome'
-// never hits 'aws'.
+// Brand tokens that are also ordinary lucide-style icon names — X is the
+// close glyph, Apple the fruit, Signal the bars. They only count as a brand
+// when the name itself signals a brand representation (XLogo, AppleIcon).
+const AMBIGUOUS_BRAND_TOKENS: ReadonlySet<string> = new Set(['x', 'apple', 'signal'])
+const BRAND_CONTEXT_TOKENS: ReadonlySet<string> = new Set(['logo', 'icon', 'brand'])
+
+// Brand detection: an unambiguous brand slug as the leading token, anywhere in
+// the name, or the whole tokenized name joined back together — plus ambiguous
+// tokens only when a logo/icon/brand token rides along. Tokens are matched
+// whole — 'awesome' never hits 'aws', 'xLengthViolation' never hits 'x', and a
+// bare lucide `X` is a close icon, not the X brand.
 export function detectBrand(name: string): string | null {
   const tokens = tokenizeIconName(name)
   if (tokens.length === 0) return null
-  if (BRAND_TOKENS.has(tokens[0])) return tokens[0]
+  const unambiguous = (t: string) => BRAND_TOKENS.has(t) && !AMBIGUOUS_BRAND_TOKENS.has(t)
+  if (unambiguous(tokens[0])) return tokens[0]
   const slug = tokens.join('')
-  if (BRAND_TOKENS.has(slug)) return slug
+  if (unambiguous(slug)) return slug
+  const mid = tokens.find(unambiguous)
+  if (mid) return mid
+  const amb = tokens.find(t => AMBIGUOUS_BRAND_TOKENS.has(t))
+  if (amb && tokens.some(t => BRAND_CONTEXT_TOKENS.has(t))) return amb
   return null
 }

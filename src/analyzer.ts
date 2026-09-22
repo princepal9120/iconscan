@@ -16,12 +16,23 @@ const SEVERITY_RANK: Record<IconIssue['severity'], number> = {
   info: 2
 }
 
+// A local import only counts as a brand-icon candidate when the name reads
+// like a brand logo component — XLogo, GoogleIcon, MetaLogo. Plain functions
+// (refreshRedditAccessToken, sendSlackMessage) are not icons.
+const BRAND_NAME_SUFFIX = /(?:Logo|Icon|Brand)$/
+
 // An import is icon-relevant when its source is a known icon library or its
-// exported name is a generic placeholder / brand slug — anything the rules
-// below can report on.
+// exported name is a generic placeholder / brand-logo name — anything the
+// rules below can report on.
+function isComponentName(name: string): boolean {
+  return /^[A-Z][a-zA-Z0-9]*$/.test(name) && /[a-z]/.test(name)
+}
+
 function isIconRelevant(imp: IconRef): boolean {
   if (resolveLibrary(imp.source)) return true
-  return GENERIC_ICON_NAMES.has(imp.name.toLowerCase()) || detectBrand(imp.name) !== null
+  if (isComponentName(imp.name) && GENERIC_ICON_NAMES.has(imp.name.toLowerCase())) return true
+  if (!isLocalSource(imp.source)) return false
+  return BRAND_NAME_SUFFIX.test(imp.name) && detectBrand(imp.name) !== null
 }
 
 function isLocalSource(source: string): boolean {
@@ -74,9 +85,11 @@ export function analyze(refs: IconRef[]): { issues: IconIssue[]; stats: AnalyzeS
     })
   }
 
-  // generic-icon
+  // generic-icon — only component-shaped names (Icon, Logo); a BRAND or ICONS
+  // constant is not an icon component.
   const genericNames = new Set<string>()
   for (const imp of imports) {
+    if (!isComponentName(imp.name)) continue
     const generic = imp.name.toLowerCase()
     if (!GENERIC_ICON_NAMES.has(generic)) continue
     genericNames.add(imp.name)
@@ -102,7 +115,8 @@ export function analyze(refs: IconRef[]): { issues: IconIssue[]; stats: AnalyzeS
     issues.push(issue)
   }
 
-  // brand-icon
+  // brand-icon — lib imports are icon components so any brand token counts;
+  // local imports need the logo-style name suffix (gated in isIconRelevant).
   const brandNames = new Set<string>()
   for (const imp of imports) {
     const slug = detectBrand(imp.name)
