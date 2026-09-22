@@ -245,9 +245,10 @@ export function tokenizeIconName(name: string): string[] {
 }
 
 // Brand tokens that are also ordinary lucide-style icon names — X is the
-// close glyph, Apple the fruit, Signal the bars. They only count as a brand
-// when the name itself signals a brand representation (XLogo, AppleIcon).
-const AMBIGUOUS_BRAND_TOKENS: ReadonlySet<string> = new Set(['x', 'apple', 'signal'])
+// close glyph, Apple the fruit, Signal the bars, ZoomIn/ZoomOut magnifiers.
+// They only count as a brand when the name itself signals a brand
+// representation (XLogo, AppleIcon).
+const AMBIGUOUS_BRAND_TOKENS: ReadonlySet<string> = new Set(['x', 'apple', 'signal', 'zoom'])
 const BRAND_CONTEXT_TOKENS: ReadonlySet<string> = new Set(['logo', 'icon', 'brand'])
 
 // Brand detection: an unambiguous brand slug as the leading token, anywhere in
