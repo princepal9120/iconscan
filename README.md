@@ -3,7 +3,7 @@
 Deterministic icon audits for React / Next.js / TypeScript apps. Score, find dead icons, recommend better alternatives. Built for your terminal, your CI, and your AI agent.
 
 ```bash
-npx iconscan .
+bunx iconscan .
 ```
 
 ## What it checks
@@ -80,11 +80,11 @@ Starts at 100, then subtracts capped penalties per category — dead imports, du
 ## Development
 
 ```bash
-npm install
-npm run build       # bundle dist/cli.js with tsup
-npm run dev         # run the CLI from source via tsx
-npm test            # fixture suite (tsx --test)
-npm run typecheck   # strict tsc --noEmit
+bun install
+bun run build       # bundle dist/cli.js with tsup
+bun run dev         # run the CLI from source (bun runs TS natively)
+bun test            # fixture suite
+bun run typecheck   # strict tsc --noEmit
 ```
 
 ## License

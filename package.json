@@ -4,6 +4,7 @@
   "description": "Deterministic icon audit for React / Next.js / TypeScript projects. Score, find dead icons, recommend alternatives.",
   "type": "module",
   "license": "MIT",
+  "packageManager": "bun@1.4.2",
   "keywords": [
     "icon",
     "audit",
@@ -21,10 +22,10 @@
     "iconscan": "./dist/cli.js"
   },
   "scripts": {
-    "dev": "tsx src/cli.ts",
+    "dev": "bun src/cli.ts",
     "build": "tsup src/cli.ts --format esm --target node18 --minify",
     "start": "node dist/cli.js",
-    "test": "tsx --test 'tests/**/*.test.ts'",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -33,7 +34,6 @@
     "lucide-react": "^0.544.0",
     "react-icons": "^5.7.0",
     "tsup": "^8.0.0",
-    "tsx": "^4.23.13",
     "typescript": "^5.0.0"
   },
   "dependencies": {
