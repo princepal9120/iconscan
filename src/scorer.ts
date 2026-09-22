@@ -1,33 +1,21 @@
 // src/scorer.ts — compute 0-100 score from issues and stats
+import chalk from 'chalk'
 import { ScanResult } from './types.js'
 
+// Stats are the single source of penalties: a category counted in stats is
+// never counted again as issues. The only issue-derived term is the count of
+// error-severity findings.
 export function computeScore(stats: ScanResult['stats'], issues: ScanResult['issues']): number {
-  let score = 100
+  const errorCount = issues.filter(i => i.severity === 'error').length
 
-  // Deduct for dead icons (unused imports)
-  const deadPenalty = Math.min(stats.deadIcons * 5, 25)
-  score -= deadPenalty
-
-  // Deduct for duplicates
-  const dupPenalty = Math.min(stats.duplicateIcons * 3, 15)
-  score -= dupPenalty
-
-  // Deduct for generic icons
-  const genericPenalty = Math.min(stats.genericIcons * 4, 20)
-  score -= genericPenalty
-
-  // Deduct for error-severity issues
-  const errors = issues.filter(i => i.severity === 'error').length
-  score -= Math.min(errors * 8, 20)
-
-  // Deduct for warning-severity issues
-  const warnings = issues.filter(i => i.severity === 'warning').length
-  score -= Math.min(warnings * 3, 15)
-
-  // Deduct for too many libraries (fragmentation)
-  if (stats.libraries.length > 2) {
-    score -= (stats.libraries.length - 2) * 5
-  }
+  const score =
+    100 -
+    Math.min(stats.deadIcons * 4, 20) -
+    Math.min(stats.duplicateIcons * 6, 12) -
+    Math.min(stats.genericIcons * 3, 15) -
+    Math.min(stats.parseErrors * 5, 10) -
+    Math.min(Math.max(0, stats.libraries.length - 2) * 4, 12) -
+    Math.min(errorCount * 8, 20)
 
   return Math.max(0, Math.min(100, Math.round(score)))
 }
@@ -40,13 +28,19 @@ export function getGrade(score: number): string {
   return 'F'
 }
 
-export function getGradeColor(grade: string): string {
+export function getGradeColor(grade: string): (text: string) => string {
   switch (grade) {
-    case 'A': return '\x1b[32m' // green
-    case 'B': return '\x1b[92m' // light green
-    case 'C': return '\x1b[33m' // yellow
-    case 'D': return '\x1b[93m' // light yellow
-    case 'F': return '\x1b[31m' // red
-    default: return '\x1b[0m'
+    case 'A':
+      return chalk.green
+    case 'B':
+      return chalk.greenBright
+    case 'C':
+      return chalk.yellow
+    case 'D':
+      return chalk.yellowBright
+    case 'F':
+      return chalk.red
+    default:
+      return chalk.reset
   }
 }
