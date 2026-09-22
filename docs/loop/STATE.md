@@ -20,10 +20,10 @@ tests, no slop. Verified by `npx tsc --noEmit` + `npm run build` +
 
 1. T1 AST scanner + types contract — DONE, reviewed clean
 2. T2 analyzer + brand/generic data — DONE, reviewed clean
-3. T3 structured autofix — DONE, reviewed, fixes verified (486bbb5+6a52151)
-4. T4 CLI/report polish — child impl 44da2a50 running
-5. T5 tests, strict, docs, cleanup
-6. Final review + PR
+3. T3 structured autofix — DONE, re-review r1 PASS (486bbb5+6a52151+FP fixes)
+4. T4 CLI/report polish — DONE (7e5dab7)
+5. T5 tests, strict, docs, cleanup — DONE (9ed266c+0c89001; r0 NEEDS-FIXES closed: malformed-fallback + barrel-import coverage, tsconfig on tests, README aliases, LICENSE)
+6. Final whole-branch review — running (f7f4bc7e), then PR
 
 ## Real-project verification (orchestrator)
 
@@ -32,12 +32,17 @@ tests, no slop. Verified by `npx tsc --noEmit` + `npm run build` +
   with logo/icon/brand context tokens; non-icon imports (functions like
   refreshRedditAccessToken) excluded via BRAND_NAME_SUFFIX gate; generic-icon
   requires PascalCase. Commits c367cf9 + 81db6a9.
-- Rescan results (honest): aicmohq score 60 — 8 dead imports, 31 legit
-  logo-verify infos, 0 FPs. jobclaw score 45 — 14 dead imports, 6 real
-  lucide-brand warnings (Linkedin/Github/Twitter), 5-lib fragmentation.
-- Both repos have REAL fixable issues → fix PRs owed in each, run through
-  iconscan --apply as the e2e proof (defer until T5 lands + children PRs
-  settle to avoid conflicts with the 3 in-flight aicmohq revamp PRs).
+- Rescan results (honest, final build 229cd58): aicmohq score 60 — 8 dead
+  imports, 31 legit logo-verify infos, 0 FPs. jobclaw score 68 — 14 dead
+  imports, 2 lucide-brand warnings (Github→SiGithub, Twitter→SiX),
+  Linkedin×4 → info path (simple-icons dropped it), 5-lib fragmentation.
+- T3 r1 MEDIUM fixed (229cd58): dropped 7 stale BRAND_TO_SIMPLE targets
+  removed from react-icons 5.7.0 (linkedin/slack/microsoft/twilio/skype/
+  amazon/aws) — they now take the honest info path.
+- jobclaw fix PR opened via real --apply run: princepal9120/jobclaw#93
+  (14 dead imports removed, Github/Twitter/Linkedin → react-icons).
+  aicmohq fix PR still deferred until the 3 revamp PRs (#93/#94/#95)
+  settle — its dead imports overlap files those PRs touch.
 
 ## Triage inbox
 
