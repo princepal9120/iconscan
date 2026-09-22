@@ -42,28 +42,6 @@ const FEATURES = [
   },
 ];
 
-const DEMO_LINES: { text: string; className?: string }[] = [
-  { text: "$ iconscan apps/web", className: "text-foreground" },
-  { text: "", className: "" },
-  { text: "iconscan · apps/web", className: "text-foreground font-semibold" },
-  { text: "█████████████████████░░░░░░  68/100  D", className: "text-orange-400" },
-  { text: "scanned 461 files · 723 icons · 5 libraries", className: "text-muted" },
-  { text: "", className: "" },
-  { text: "warnings", className: "text-foreground font-semibold" },
-  { text: "  dead-import   src/app/onboard/page.tsx:18 — 'CheckCircle2' imported but never used", className: "text-muted" },
-  { text: "                → Remove 'CheckCircle2' from 'lucide-react'", className: "text-emerald-500" },
-  { text: "  dead-import   src/app/onboard/page.tsx:19 — 'X' imported but never used", className: "text-muted" },
-  { text: "  dead-import   src/components/auto-apply/AutoApplyClient.tsx:16 — 'Filter' …", className: "text-muted" },
-  { text: "  brand-icon    src/components/startups/StartupOutreachPanel.tsx — 'Github' is a brand", className: "text-yellow-500" },
-  { text: "                → Replace with 'SiGithub' from 'react-icons/si'", className: "text-emerald-500" },
-  { text: "", className: "" },
-  { text: "info", className: "text-foreground font-semibold" },
-  { text: "  fragmentation 5 icon libraries — consider consolidating to ≤2", className: "text-muted" },
-  { text: "", className: "" },
-  { text: "$ iconscan . --apply --yes   # applied 21 fixes · 5 backups written", className: "text-foreground" },
-  { text: "$ iconscan .                 # 88/100  B", className: "text-foreground" },
-];
-
 const STEPS = [
   {
     n: "01",
@@ -114,16 +92,17 @@ export function TerminalDemo() {
           <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-green-500/70" />
           <span className="ml-3 font-mono text-xs text-muted">
-            real output — jobclaw/apps/web
+            real run — scan, fix, rescan
           </span>
         </div>
-        <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-6">
-          {DEMO_LINES.map((l, i) => (
-            <div key={i} className={l.className || "text-muted"}>
-              {l.text || " "}
-            </div>
-          ))}
-        </pre>
+        <video
+          src="/demo.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="block w-full bg-[#1e2128]"
+        />
       </div>
     </section>
   );

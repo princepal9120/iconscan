@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Github, Heart, ScanSearch } from "lucide-react";
+import { Github, Heart } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export const REPO = "https://github.com/princepal9120/iconscan";
@@ -8,7 +8,8 @@ export function SiteNav() {
   return (
     <header className="mx-auto flex w-full max-w-5xl items-center gap-6 px-6 py-5">
       <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-        <ScanSearch size={18} />
+        {/* invert+hue-rotate flips the black brackets to white in dark mode while keeping the orange sparkle */}
+        <img src="/logo.png" alt="iconscan logo" width={20} height={20} className="dark:invert dark:hue-rotate-180" />
         iconscan
       </Link>
       <nav className="flex items-center gap-5 text-sm font-medium">
