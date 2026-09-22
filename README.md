@@ -28,9 +28,9 @@ iconscan [path] [flags]
 | Flag | Default | Description |
 |---|---|---|
 | `path` | `.` | Project directory to scan |
-| `--format <fmt>` | `pretty` | Output format: `pretty`, `json`, `md` |
+| `-f, --format <fmt>` | `pretty` | Output format: `pretty`, `json`, `md` |
 | `--fail-under <n>` | `0` | Exit 1 when the score is below `n` (CI gate) |
-| `--exclude <globs>` | — | Comma-separated extra ignore patterns, e.g. `"e2e/**,docs/**"` |
+| `-e, --exclude <globs>` | — | Comma-separated extra ignore patterns, e.g. `"e2e/**,docs/**"` |
 | `--apply` | off | Auto-fix safe issues (writes `*.iconscan.bak` backups) |
 | `--yes` | off | Skip the confirmation prompt when used with `--apply` |
 | `--prompt` | off | Print a paste-ready remediation handoff for AI agents |

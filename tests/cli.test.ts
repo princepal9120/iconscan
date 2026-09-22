@@ -62,6 +62,20 @@ describe('cli e2e', () => {
     assert.ok(dirty.stats.deadIcons === clean.stats.deadIcons + 1)
   })
 
+  test('--format md emits a markdown report', () => {
+    const res = run([PROJECT, '--format', 'md'])
+    assert.equal(res.status, 0, res.stderr)
+    assert.match(res.stdout, /^# Iconscan Report/m)
+    assert.match(res.stdout, /\| Metric \| Value \|/)
+  })
+
+  test('--prompt prints an AI-agent remediation handoff', () => {
+    const res = run([PROJECT, '--prompt'])
+    assert.equal(res.status, 0, res.stderr)
+    assert.ok(res.stdout.length > 200)
+    assert.match(res.stdout, /icon/i)
+  })
+
   test('--rollback on a clean dir prints the no-backups note', () => {
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'iconscan-empty-'))
     try {

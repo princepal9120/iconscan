@@ -85,4 +85,17 @@ describe('scanner', () => {
     assert.equal(out.parseErrors.length, 0)
     assert.equal(out.filesScanned, filesScanned)
   })
+
+  test('malformed file records a parse error and still yields fallback refs', async () => {
+    const malformedDir = fileURLToPath(new URL('./fixtures/malformed', import.meta.url))
+    const out = await scanProject(malformedDir)
+    assert.equal(out.parseErrors.length, 1)
+    assert.equal(out.parseErrors[0].file, 'broken.tsx')
+    const fallback = out.refs.filter(r => r.file === 'broken.tsx')
+    assert.deepEqual(
+      fallback.filter(r => r.type === 'import').map(r => r.name).sort(),
+      ['Moon', 'Star']
+    )
+    assert.ok(fallback.some(r => r.type === 'usage' && r.localName === 'Star'))
+  })
 })

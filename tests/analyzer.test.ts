@@ -98,6 +98,14 @@ describe('analyzer', () => {
     assert.equal(issues.filter(i => i.message.includes('AwesomeWidget')).length, 0)
   })
 
+  test('namespace import from a lib produces a barrel-import info', () => {
+    const barrels = byRule('barrel-import')
+    assert.equal(barrels.length, 1)
+    assert.equal(barrels[0].severity, 'info')
+    assert.equal(barrels[0].file, 'app.tsx')
+    assert.ok(barrels[0].message.includes("'@tabler/icons-react'"))
+  })
+
   test('fragmentation fires when more than 2 libraries are present', () => {
     const frag = byRule('fragmentation')
     assert.equal(frag.length, 1)
