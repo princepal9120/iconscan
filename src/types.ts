@@ -1,31 +1,54 @@
-// src/types.ts — shared contract for all iconscan modules
+export type IconUsageKind = 'jsx' | 'member' | 'reference'
+
 export interface IconRef {
-  name: string            // e.g. "ArrowRight", "Home"
-  source: string          // e.g. "lucide-react", "@heroicons/react/24/outline"
-  file: string            // relative path from scan root
-  line: number
-  type: 'import' | 'jsx' | 'function-call'
+  name: string          // exported icon name, e.g. "ArrowRight" (the real name, not the alias)
+  localName: string     // local binding in the file, e.g. "Arrow" for `ArrowRight as Arrow`; for namespace member use "Icons.Foo"
+  source: string        // import source string, e.g. 'lucide-react', './components/Icon'
+  file: string          // path relative to scan root
+  line: number          // 1-based start line
+  endLine: number       // for imports: end line of the whole import statement (multi-line aware); for usages = line
+  col: number           // 0-based column
+  type: 'import' | 'usage'
+  importKind?: 'named' | 'default' | 'namespace'   // only on type='import'
+  usageKind?: IconUsageKind                        // only on type='usage'
 }
+
+export interface IconFix {
+  kind: 'remove-import' | 'replace-icon'
+  localName: string        // binding to remove or rename
+  newName?: string         // replace-icon: exported name to swap in
+  newSource?: string       // replace-icon: library exporting newName
+}
+
+export type IssueRule =
+  | 'dead-import' | 'generic-icon' | 'brand-icon'
+  | 'duplicate-source' | 'fragmentation' | 'parse-error' | 'barrel-import'
 
 export interface IconIssue {
   severity: 'error' | 'warning' | 'info'
+  rule: IssueRule
   message: string
   file?: string
   line?: number
-  suggestion?: string     // e.g. "Replace with Lucide ArrowRight"
+  suggestion?: string
+  fix?: IconFix            // present only when the fix is provably safe
 }
 
 export interface ScanResult {
   icons: IconRef[]
   issues: IconIssue[]
-  score: number           // 0-100
+  score: number            // 0-100
   stats: {
-    totalIcons: number
-    uniqueIcons: number
-    deadIcons: number      // imported but never rendered
-    duplicateIcons: number // same icon from multiple sources
-    libraries: string[]    // detected icon libraries
-    genericIcons: number   // generic/placeholder icons used
+    filesScanned: number
+    parseErrors: number
+    totalIcons: number     // icon import specifiers found
+    uniqueIcons: number    // distinct exported names
+    usedIcons: number      // imports with >=1 usage ref
+    deadIcons: number      // imports with 0 usage refs
+    duplicateIcons: number // distinct names imported from >1 library
+    libraries: string[]    // icon libraries detected (sorted)
+    genericIcons: number
+    brandIcons: number
   }
 }
 
@@ -39,26 +62,16 @@ export interface ScanOptions {
   prompt: boolean
 }
 
-export interface LibraryDef {
-  name: string            // package name
-  pattern: string         // import path pattern
-  iconPattern: RegExp     // regex to match icon names
-  isGeneric?: boolean     // generic/placeholder library
-  betterAlternatives?: string[] // suggested upgrades
+export interface ScanOutput {
+  refs: IconRef[]
+  filesScanned: number
+  parseErrors: { file: string; error: string }[]
 }
 
-// Known generic/placeholder icon names that signal "needs real icon"
-export const GENERIC_ICON_NAMES = new Set([
-  'icon', 'default-icon', 'placeholder', 'img', 'image', 'photo',
-  'picture', 'dummy', 'temp', 'temporary', 'mock', 'sample',
-  'example', 'test', 'fake', 'blank', 'empty', 'unknown',
-  'fallback', 'missing', 'none', 'null', 'undefined',
-  'help', 'question', 'info', 'alert'
-] as const)
-
-// Common company/brand logo icon patterns
-export const COMPANY_LOGO_PATTERNS = [
-  /logo/i, /brand/i, /company/i, /vendor/i, /partner/i,
-  /twitter/i, /github/i, /discord/i, /slack/i, /notion/i,
-  /figma/i, /vercel/i, /stripe/i, /twilio/i, /aws/i
-]
+export interface LibraryDef {
+  name: string
+  pattern: string          // exact package name or prefix, e.g. 'lucide-react', '@heroicons/react', 'react-icons'
+  isBrandSafe?: boolean    // exports real brand icons (react-icons/*, @fortawesome/*)
+  removedBrandIcons?: boolean // purged brand icons upstream (lucide, heroicons) — brand imports there are deprecated
+  betterAlternatives?: string[]
+}

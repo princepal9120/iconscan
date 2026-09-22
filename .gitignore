@@ -3,3 +3,4 @@ dist/
 *.iconscan.bak
 .DS_Store
 data/
+.sdd/

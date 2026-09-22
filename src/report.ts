@@ -1,34 +1,64 @@
 // src/report.ts — format scan results for pretty / json / md output
-import { ScanResult } from './types.js'
+import chalk from 'chalk'
+import { getGrade, getGradeColor } from './scorer.js'
+import { IconIssue, ScanResult } from './types.js'
 
-export function formatPretty(result: ScanResult, projectPath: string): string {
+interface ParseError {
+  file: string
+  error: string
+}
+
+function issueLocation(issue: IconIssue): string {
+  if (!issue.file) return ''
+  return issue.line != null ? `${issue.file}:${issue.line}` : issue.file
+}
+
+function prettyIssueLine(issue: IconIssue, dot: (text: string) => string): string {
+  const loc = issueLocation(issue)
+  const tag = loc ? `${loc} [${issue.rule}]` : `[${issue.rule}]`
+  let line = `    ${dot('●')} ${chalk.dim(tag)} ${issue.message}`
+  if (issue.suggestion) line += `\n      ${chalk.dim(`→ ${issue.suggestion}`)}`
+  return line
+}
+
+export function formatPretty(
+  result: ScanResult,
+  projectPath: string,
+  parseErrors: ParseError[] = []
+): string {
   const lines: string[] = []
-  const RESET = '\x1b[0m'
-  const BOLD = '\x1b[1m'
-  const GREEN = '\x1b[32m'
-  const YELLOW = '\x1b[33m'
-  const RED = '\x1b[31m'
-  const CYAN = '\x1b[36m'
-  const GRAY = '\x1b[90m'
 
   const grade = getGrade(result.score)
   const gradeColor = getGradeColor(grade)
 
+  const stat = (label: string, value: string | number) =>
+    lines.push(`    ${label.padEnd(15)}${value}`)
+  const flag = (n: number) => (n > 0 ? chalk.yellow(n) : chalk.green(0))
+
   lines.push('')
-  lines.push(`${BOLD}${CYAN}  🔍 Iconscan Report${RESET}`)
-  lines.push(`  ${GRAY}${projectPath}${RESET}`)
+  lines.push(chalk.bold.cyan('  🔍 Iconscan Report'))
+  lines.push(chalk.gray(`  ${projectPath}`))
   lines.push('')
-  lines.push(`  ${BOLD}Score: ${gradeColor}${result.score}/100 (${grade})${RESET}`)
+  lines.push(`  ${chalk.bold('Score:')} ${gradeColor(`${result.score}/100 (${grade})`)}`)
+  lines.push('')
+  lines.push(`  Scanned ${result.stats.filesScanned} files`)
   lines.push('')
 
   // Stats
-  lines.push(`  ${BOLD}Stats:${RESET}`)
-  lines.push(`    Total icons:    ${result.stats.totalIcons}`)
-  lines.push(`    Unique icons:   ${result.stats.uniqueIcons}`)
-  lines.push(`    Libraries:      ${result.stats.libraries.join(', ')}`)
-  lines.push(`    Dead imports:   ${result.stats.deadIcons > 0 ? `${YELLOW}${result.stats.deadIcons}${RESET}` : `${GREEN}0${RESET}`}`)
-  lines.push(`    Duplicates:     ${result.stats.duplicateIcons > 0 ? `${YELLOW}${result.stats.duplicateIcons}${RESET}` : `${GREEN}0${RESET}`}`)
-  lines.push(`    Generic icons:  ${result.stats.genericIcons > 0 ? `${YELLOW}${result.stats.genericIcons}${RESET}` : `${GREEN}0${RESET}`}`)
+  lines.push(chalk.bold('  Stats:'))
+  stat('Total icons:', result.stats.totalIcons)
+  stat('Unique icons:', result.stats.uniqueIcons)
+  stat('Used icons:', result.stats.usedIcons)
+  stat('Dead icons:', flag(result.stats.deadIcons))
+  stat('Libraries:', result.stats.libraries.join(', ') || 'none')
+  stat('Duplicates:', flag(result.stats.duplicateIcons))
+  stat('Generic icons:', flag(result.stats.genericIcons))
+  if (result.stats.parseErrors > 0) {
+    stat('Parse errors:', chalk.yellow(result.stats.parseErrors))
+    for (const pe of parseErrors) {
+      lines.push(chalk.dim(`      ${pe.file}: ${pe.error}`))
+    }
+  }
   lines.push('')
 
   // Issues
@@ -37,41 +67,38 @@ export function formatPretty(result: ScanResult, projectPath: string): string {
   const infos = result.issues.filter(i => i.severity === 'info')
 
   if (errors.length > 0) {
-    lines.push(`  ${BOLD}${RED}✗ ${errors.length} error(s)${RESET}`)
+    lines.push(chalk.bold.red(`  ✗ ${errors.length} error(s)`))
     for (const issue of errors.slice(0, 10)) {
-      lines.push(`    ${RED}●${RESET} ${issue.file}:${issue.line} ${issue.message}`)
-      if (issue.suggestion) lines.push(`      ${GRAY}→ ${issue.suggestion}${RESET}`)
+      lines.push(prettyIssueLine(issue, chalk.red))
     }
-    if (errors.length > 10) lines.push(`    ${GRAY}... and ${errors.length - 10} more${RESET}`)
+    if (errors.length > 10) lines.push(chalk.dim(`    ... and ${errors.length - 10} more`))
     lines.push('')
   }
 
   if (warnings.length > 0) {
-    lines.push(`  ${BOLD}${YELLOW}⚠ ${warnings.length} warning(s)${RESET}`)
+    lines.push(chalk.bold.yellow(`  ⚠ ${warnings.length} warning(s)`))
     for (const issue of warnings.slice(0, 10)) {
-      lines.push(`    ${YELLOW}●${RESET} ${issue.file}:${issue.line} ${issue.message}`)
-      if (issue.suggestion) lines.push(`      ${GRAY}→ ${issue.suggestion}${RESET}`)
+      lines.push(prettyIssueLine(issue, chalk.yellow))
     }
-    if (warnings.length > 10) lines.push(`    ${GRAY}... and ${warnings.length - 10} more${RESET}`)
+    if (warnings.length > 10) lines.push(chalk.dim(`    ... and ${warnings.length - 10} more`))
     lines.push('')
   }
 
   if (infos.length > 0) {
-    lines.push(`  ${BOLD}${CYAN}ℹ ${infos.length} suggestion(s)${RESET}`)
+    lines.push(chalk.bold.cyan(`  ℹ ${infos.length} suggestion(s)`))
     for (const issue of infos.slice(0, 10)) {
-      lines.push(`    ${CYAN}●${RESET} ${issue.file}:${issue.line} ${issue.message}`)
-      if (issue.suggestion) lines.push(`      ${GRAY}→ ${issue.suggestion}${RESET}`)
+      lines.push(prettyIssueLine(issue, chalk.cyan))
     }
-    if (infos.length > 10) lines.push(`    ${GRAY}... and ${infos.length - 10} more${RESET}`)
+    if (infos.length > 10) lines.push(chalk.dim(`    ... and ${infos.length - 10} more`))
     lines.push('')
   }
 
   if (result.score >= 90) {
-    lines.push(`  ${GREEN}${BOLD}✓ Icons look healthy!${RESET}`)
+    lines.push(chalk.green.bold('  ✓ Icons look healthy!'))
   } else if (result.score >= 70) {
-    lines.push(`  ${YELLOW}⚡ Some icons could be improved. Run with --prompt for AI-agent handoff.${RESET}`)
+    lines.push(chalk.yellow('  ⚡ Some icons could be improved. Run with --prompt for AI-agent handoff.'))
   } else {
-    lines.push(`  ${RED}✗ Significant icon issues detected. Run with --prompt for AI-agent handoff.${RESET}`)
+    lines.push(chalk.red('  ✗ Significant icon issues detected. Run with --prompt for AI-agent handoff.'))
   }
   lines.push('')
 
@@ -90,70 +117,55 @@ export function formatMarkdown(result: ScanResult, projectPath: string): string 
   lines.push('')
   lines.push(`**Score: ${result.score}/100 (${grade})**`)
   lines.push('')
+  lines.push(`Scanned ${result.stats.filesScanned} files.`)
+  lines.push('')
   lines.push('## Stats')
   lines.push('')
   lines.push('| Metric | Value |')
   lines.push('|---|---|')
   lines.push(`| Total icons | ${result.stats.totalIcons} |`)
   lines.push(`| Unique icons | ${result.stats.uniqueIcons} |`)
-  lines.push(`| Libraries | ${result.stats.libraries.join(', ')} |`)
+  lines.push(`| Used icons | ${result.stats.usedIcons} |`)
   lines.push(`| Dead imports | ${result.stats.deadIcons} |`)
+  lines.push(`| Libraries | ${result.stats.libraries.join(', ') || 'none'} |`)
   lines.push(`| Duplicates | ${result.stats.duplicateIcons} |`)
   lines.push(`| Generic icons | ${result.stats.genericIcons} |`)
+  lines.push(`| Parse errors | ${result.stats.parseErrors} |`)
   lines.push('')
 
   const errors = result.issues.filter(i => i.severity === 'error')
   const warnings = result.issues.filter(i => i.severity === 'warning')
   const infos = result.issues.filter(i => i.severity === 'info')
 
+  const mdIssueLines = (issues: IconIssue[]) => {
+    for (const issue of issues) {
+      const loc = issueLocation(issue)
+      const ref = loc ? ` **${loc}** —` : ''
+      lines.push(`- \`${issue.rule}\`${ref} ${issue.message}`)
+      if (issue.suggestion) lines.push(`  - → ${issue.suggestion}`)
+    }
+  }
+
   if (errors.length > 0) {
     lines.push('## Errors')
     lines.push('')
-    for (const issue of errors) {
-      lines.push(`- **${issue.file}:${issue.line}** — ${issue.message}`)
-      if (issue.suggestion) lines.push(`  - → ${issue.suggestion}`)
-    }
+    mdIssueLines(errors)
     lines.push('')
   }
 
   if (warnings.length > 0) {
     lines.push('## Warnings')
     lines.push('')
-    for (const issue of warnings) {
-      lines.push(`- **${issue.file}:${issue.line}** — ${issue.message}`)
-      if (issue.suggestion) lines.push(`  - → ${issue.suggestion}`)
-    }
+    mdIssueLines(warnings)
     lines.push('')
   }
 
   if (infos.length > 0) {
     lines.push('## Suggestions')
     lines.push('')
-    for (const issue of infos) {
-      lines.push(`- **${issue.file}:${issue.line}** — ${issue.message}`)
-      if (issue.suggestion) lines.push(`  - → ${issue.suggestion}`)
-    }
+    mdIssueLines(infos)
     lines.push('')
   }
 
   return lines.join('\n')
-}
-
-function getGrade(score: number): string {
-  if (score >= 90) return 'A'
-  if (score >= 80) return 'B'
-  if (score >= 70) return 'C'
-  if (score >= 60) return 'D'
-  return 'F'
-}
-
-function getGradeColor(grade: string): string {
-  switch (grade) {
-    case 'A': return '\x1b[32m'
-    case 'B': return '\x1b[92m'
-    case 'C': return '\x1b[33m'
-    case 'D': return '\x1b[93m'
-    case 'F': return '\x1b[31m'
-    default: return '\x1b[0m'
-  }
 }
