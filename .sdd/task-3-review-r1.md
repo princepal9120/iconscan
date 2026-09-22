@@ -4,6 +4,9 @@ Reviewer: r1. Scope: `486bbb5` (fix.ts), `6a52151` (T3 review fixes),
 `c367cf9` + `81db6a9` (brand-FP fixes), `cli.ts` --apply/--rollback wiring.
 Note: `.sdd/task-3-brief.md` is not in the repo/tree — reviewed against the
 orchestrator's brief requirements + `docs/plans/iconscan-e2e.md` T3 spec.
+While this review ran, T4 commit `7e5dab7` landed on the branch
+(cli/report/prompt/scorer only — fix.ts/analyzer.ts/libraries.ts byte-
+identical); noted where it intersects a finding.
 
 ## Verdict: PASS with findings
 
@@ -106,11 +109,12 @@ T3 blocker. Seven LOW, three INFO.
    `linkedin → FaLinkedin` from `react-icons/fa6`, or drop to the info-only
    "official SVG" path).
 
-2. **`--format json` stdout is still polluted** — `console.log('Scanning …')`
-   at `src/cli.ts:47` precedes the JSON payload on stdout (confirmed on
-   jobclaw run: line 1 is status text). Listed in the v0.1.0 defect list and
-   assigned to T4 (stderr status); flagging so it isn't lost — the apply
-   messages in this diff correctly went to stderr while this stayed.
+2. ~~`--format json` stdout pollution~~ — **RESOLVED by `7e5dab7`** (landed
+   during this review): status output moved to `console.error`
+   (`src/cli.ts:94`); re-verified on new HEAD — `node dist/cli.js
+   jobclaw/apps/web --format json` emits pure JSON (line 1 is `{`; 41 issues
+   parse clean). Kept for record: at `81db6a9`, `src/cli.ts:47` printed
+   `Scanning …` to stdout ahead of the JSON payload.
 
 ### LOW
 
