@@ -130,9 +130,32 @@ function checkExport(source: string, name: string, rootPath: string): ExportChec
       dts += '\n' + fs.readFileSync(c, 'utf-8')
     } catch { /* candidate absent */ }
   }
-  if (!dts) return 'export not found'
   const re = new RegExp(`(?<![\\w$])${escapeRegExp(name)}(?![\\w$])`)
-  return re.test(dts) ? 'ok' : 'export not found'
+  if (re.test(dts)) return 'ok'
+
+  // index.mjs / exports-map route for untyped packages: resolve the entry
+  // (honors `exports`) and check JS sources for real export statements —
+  // `{ X as Y }` only counts Y, so internal names don't false-positive.
+  const esc = escapeRegExp(name)
+  const exportRe = new RegExp(
+    `export\\s+(?:declare\\s+)?(?:const|let|var|function|class)\\s+${esc}(?![\\w$])` +
+      `|export\\s*\\{[^}]*\\b${esc}(?=\\s*[,}])` +
+      `|export\\s*\\{[^}]*\\bas\\s+${esc}(?=\\s*[,}])` +
+      `|export\\s+\\*\\s+as\\s+${esc}(?![\\w$])` +
+      `|exports\\s*\\.\\s*${esc}\\s*=`
+  )
+  const jsCandidates: string[] = []
+  try {
+    jsCandidates.push(req.resolve(source))
+  } catch { /* entry unresolvable — still try the guesses */ }
+  jsCandidates.push(path.join(pkgDir, sub, 'index.mjs'))
+  jsCandidates.push(path.join(pkgDir, 'index.mjs'))
+  for (const c of [...new Set(jsCandidates)]) {
+    try {
+      if (exportRe.test(fs.readFileSync(c, 'utf-8'))) return 'ok'
+    } catch { /* candidate absent */ }
+  }
+  return 'export not found'
 }
 
 // --- splice construction -------------------------------------------------
@@ -227,14 +250,18 @@ function detectQuote(content: string): string {
 
 // Identifiers (incl. JSX closing tags) bound to the given import binding —
 // the set a rename must rewrite. Declaration sites, property keys and
-// shadowed names are excluded.
+// shadowed names are excluded. When shadowName is given, a use site where
+// that name resolves to a different binding sets `blocked` — renaming to it
+// would silently retarget the use.
 function boundUsageRanges(
   ast: t.File,
   binding: { localName: string },
   getBinding: (p: NodePath<t.Identifier> | NodePath<t.JSXIdentifier>) => unknown,
-  bindingObj: unknown
-): { start: number; end: number }[] {
+  bindingObj: unknown,
+  shadowName?: string
+): { ranges: { start: number; end: number }[]; blocked: boolean } {
   const ranges: { start: number; end: number }[] = []
+  let blocked = false
   const check = (p: NodePath<t.Identifier> | NodePath<t.JSXIdentifier>) => {
     if (p.node.name !== binding.localName) return
     if (getBinding(p) !== bindingObj) return
@@ -244,6 +271,13 @@ function boundUsageRanges(
       p.parentPath.isJSXOpeningElement() ||
       p.parentPath.isJSXClosingElement()
     if (!ref) return
+    if (shadowName) {
+      const other = p.scope.getBinding(shadowName)
+      if (other && other !== bindingObj) {
+        blocked = true
+        return
+      }
+    }
     ranges.push({ start: p.node.start ?? 0, end: p.node.end ?? 0 })
   }
   traverse(ast, {
@@ -254,7 +288,7 @@ function boundUsageRanges(
       check(p)
     }
   })
-  return ranges
+  return { ranges, blocked }
 }
 
 interface FileOutcome {
@@ -295,10 +329,14 @@ function processFile(
   })
 
   const declEdits = new Map<t.ImportDeclaration, DeclEdit>()
-  const insertIntoDecl = new Map<t.ImportDeclaration, string[]>()
+  const insertIntoDecl = new Map<
+    t.ImportDeclaration,
+    { name: string; specText: string; isType: boolean }[]
+  >()
   const newLinesBySource = new Map<string, { isType: boolean; names: string[] }>()
   const usageSplices: Splice[] = []
   const consumed = new Set<string>()
+  const emittedNames = new Set<string>()
 
   const editFor = (node: t.ImportDeclaration): DeclEdit => {
     let e = declEdits.get(node)
@@ -362,20 +400,46 @@ function processFile(
       (spec.type === 'ImportSpecifier' && spec.importKind === 'type')
     const specText = isType ? `type ${newName}` : newName
 
+    // newName must not collide with a binding already visible — at a renamed
+    // usage site (shadowing would silently retarget it), in the module scope
+    // (`import { Menu, Menu }` is a SyntaxError), or with a name an earlier
+    // fix emitted this pass.
+    const { ranges: usageRanges, blocked: usageBlocked } = binding
+      ? boundUsageRanges(
+          ast,
+          { localName },
+          p => p.scope.getBinding(localName),
+          binding,
+          newName
+        )
+      : { ranges: [] as { start: number; end: number }[], blocked: false }
+    const foreignBinding = (b: unknown) => b !== undefined && b !== binding
+    if (
+      usageBlocked ||
+      emittedNames.has(newName) ||
+      foreignBinding(declPath.scope.getBinding(newName))
+    ) {
+      outcome.skipped.push({ file: relFile, name: localName, reason: 'name conflict' })
+      continue
+    }
+
     if (newSource === declPath.node.source.value) {
       editFor(declPath.node).renames.set(spec, specText)
     } else {
       editFor(declPath.node).removed.add(spec)
+      // A namespace specifier can never take named members — `import * as ns,
+      // { N }` is a SyntaxError — so namespace decls are never merge targets.
       const target = declPaths.find(
         dp =>
           dp.node.source.value === newSource &&
           dp.node.specifiers.length > 0 &&
+          !dp.node.specifiers.some(s => s.type === 'ImportNamespaceSpecifier') &&
           (isType || dp.node.importKind !== 'type')
       )
       if (target) {
         const decorated = target.node.importKind === 'type' ? newName : specText
         const list = insertIntoDecl.get(target.node) ?? []
-        list.push(decorated)
+        list.push({ name: newName, specText: decorated, isType })
         insertIntoDecl.set(target.node, list)
       } else {
         const key = `${newSource}|${isType}`
@@ -385,15 +449,8 @@ function processFile(
       }
     }
 
-    if (binding) {
-      const ranges = boundUsageRanges(
-        ast,
-        { localName },
-        p => p.scope.getBinding(localName),
-        binding
-      )
-      for (const r of ranges) usageSplices.push({ start: r.start, end: r.end, text: newName })
-    }
+    for (const r of usageRanges) usageSplices.push({ start: r.start, end: r.end, text: newName })
+    emittedNames.add(newName)
     outcome.applied++
   }
 
@@ -401,19 +458,42 @@ function processFile(
   for (const edit of declEdits.values()) splices.push(...declSplices(content, edit))
   splices.push(...usageSplices)
 
-  for (const [targetDecl, names] of insertIntoDecl) {
-    const named = targetDecl.specifiers.filter(s => s.type === 'ImportSpecifier')
+  for (const [targetDecl, items] of insertIntoDecl) {
+    const specs = targetDecl.specifiers
+    const named = specs.filter(s => s.type === 'ImportSpecifier')
+    const edit = declEdits.get(targetDecl)
+    const kept = edit ? specs.filter(s => !edit.removed.has(s)) : specs
+    const keptNamed = kept.filter(s => s.type === 'ImportSpecifier')
+    // A decl being fully removed — or losing its whole `{ ... }` group while
+    // surviving on a default specifier — can't take the insertion: the splice
+    // would land inside a removal range and mangle or swallow the merged
+    // name. Emit a fresh decl for it instead.
+    const mergeable =
+      kept.length > 0 &&
+      !(named.length > 0 && keptNamed.length === 0) &&
+      !specs.some(s => s.type === 'ImportNamespaceSpecifier')
+    if (!mergeable) {
+      for (const item of items) {
+        const key = `${targetDecl.source.value}|${item.isType}`
+        const group = newLinesBySource.get(key) ?? { isType: item.isType, names: [] }
+        group.names.push(item.name)
+        newLinesBySource.set(key, group)
+      }
+      continue
+    }
+    const inserted = items.map(i => i.specText).join(', ')
     if (named.length > 0) {
       const braceEnd = content.lastIndexOf('}', targetDecl.source.start ?? 0)
       const before = prevNonWs(content, braceEnd - 1)
       const text =
         content[before] === ',' || content[before] === '{'
-          ? ` ${names.join(', ')}`
-          : `, ${names.join(', ')}`
+          ? ` ${inserted}`
+          : `, ${inserted}`
       splices.push({ start: before + 1, end: before + 1, text })
     } else {
-      const last = targetDecl.specifiers[targetDecl.specifiers.length - 1]
-      splices.push({ start: last.end ?? 0, end: last.end ?? 0, text: `, { ${names.join(', ')} }` })
+      // Default-only decl — `import D, { N }` stays valid ES.
+      const last = specs[specs.length - 1]
+      splices.push({ start: last.end ?? 0, end: last.end ?? 0, text: `, { ${inserted} }` })
     }
   }
 
@@ -479,7 +559,8 @@ export function restoreBackups(rootPath: string): { restored: number } {
   const backups = globSync('**/*.iconscan.bak', {
     cwd: rootPath,
     absolute: true,
-    nodir: true
+    nodir: true,
+    dot: true
   })
   let restored = 0
   for (const bak of backups) {

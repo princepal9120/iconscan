@@ -46,8 +46,13 @@ program
     // Run scan
     console.log(`Scanning ${rootPath}...`)
 
-    const { refs } = await scanProject(rootPath)
-    const { issues, stats } = analyze(refs)
+    const { refs, filesScanned, parseErrors } = await scanProject(rootPath)
+    const { issues, stats: analyzeStats } = analyze(refs)
+    const stats: ScanResult['stats'] = {
+      filesScanned,
+      parseErrors: parseErrors.length,
+      ...analyzeStats
+    }
     const score = computeScore(stats, issues)
 
     const result: ScanResult = { icons: refs, issues, score, stats }
@@ -82,8 +87,8 @@ program
         console.log(`\nFound ${fixableIssues.length} auto-fixable issues.`)
         console.log('Run with --yes to apply fixes, or review with --prompt first.')
       } else {
-        const { applied, skipped } = applyFixes(rootPath, issues)
-        console.error(`\n${applied} applied, ${skipped.length} skipped`)
+        const { applied, skipped, backups } = applyFixes(rootPath, issues)
+        console.error(`\nApplied ${applied} fix(es), skipped ${skipped.length}, ${backups.length} backup(s) written`)
         for (const s of skipped) {
           console.error(`  - ${s.file}: ${s.name} — ${s.reason}`)
         }
