@@ -230,8 +230,7 @@ function recordNamespaceMember(
   if (obj.type !== 'Identifier' && obj.type !== 'JSXIdentifier') return
   const entry = bindings.get(obj.name)
   if (!entry || entry.importKind !== 'namespace') return
-  const objPath = p.get('object')
-  if (entry.binding && objPath.scope.getBinding(obj.name) !== entry.binding) return
+  if (entry.binding && p.scope.getBinding(obj.name) !== entry.binding) return
   const jsxAncestor = p.findParent(a => a.isJSXOpeningElement() || a.isJSXClosingElement())
   if (jsxAncestor?.isJSXClosingElement()) return
 
