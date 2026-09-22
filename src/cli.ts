@@ -7,7 +7,7 @@ import { analyze } from './analyzer.js'
 import { computeScore } from './scorer.js'
 import { formatPretty, formatJson, formatMarkdown } from './report.js'
 import { generatePrompt } from './prompt.js'
-import { applyFixes, restoreBackup } from './fix.js'
+import { applyFixes, restoreBackups } from './fix.js'
 import { ScanOptions, ScanResult } from './types.js'
 
 const program = new Command()
@@ -38,16 +38,8 @@ program
 
     // Handle rollback
     if (opts.rollback) {
-      console.log(`Rolling back changes in ${rootPath}...`)
-      const { glob } = await import('glob')
-      const backups = await glob('**/*.iconscan.bak', { cwd: rootPath, absolute: true })
-      for (const backup of backups) {
-        const original = backup.replace('.iconscan.bak', '')
-        if (restoreBackup(original)) {
-          console.log(`  ✓ Restored ${path.relative(rootPath, original)}`)
-        }
-      }
-      console.log('Done.')
+      const { restored } = restoreBackups(rootPath)
+      console.log(`Restored ${restored} file(s) from .iconscan.bak backups.`)
       return
     }
 
@@ -82,44 +74,18 @@ program
 
     // Apply fixes
     if (options.apply) {
-      const fixableIssues = issues.filter(i =>
-        i.suggestion &&
-        i.file &&
-        i.line &&
-        (i.severity === 'warning' || i.severity === 'info')
-      )
+      const fixableIssues = issues.filter(i => i.fix && i.file)
 
       if (fixableIssues.length === 0) {
         console.log('\nNo auto-fixable issues found.')
-      } else {
+      } else if (!options.yes) {
         console.log(`\nFound ${fixableIssues.length} auto-fixable issues.`)
-
-        if (!options.yes) {
-          console.log('Run with --yes to apply fixes, or review with --prompt first.')
-        } else {
-          const fixesByFile = new Map<string, typeof fixableIssues>()
-          for (const issue of fixableIssues) {
-            if (!issue.file) continue
-            const list = fixesByFile.get(issue.file) ?? []
-            list.push(issue)
-            fixesByFile.set(issue.file, list)
-          }
-
-          let totalApplied = 0
-          for (const [file, fileIssues] of fixesByFile) {
-            const fullPath = path.join(rootPath, file)
-            const fixes = fileIssues.map(i => ({
-              file: i.file!,
-              line: i.line!,
-              oldText: '',
-              newText: i.suggestion!,
-              description: i.suggestion!
-            }))
-            const { applied, backupPath } = applyFixes(fullPath, fixes)
-            totalApplied += applied
-            console.log(`  ✓ ${file}: ${applied} fix(es) applied, backup at ${path.relative(rootPath, backupPath)}`)
-          }
-          console.log(`\nTotal: ${totalApplied} fix(es) applied. Run again to verify score.`)
+        console.log('Run with --yes to apply fixes, or review with --prompt first.')
+      } else {
+        const { applied, skipped } = applyFixes(rootPath, issues)
+        console.error(`\n${applied} applied, ${skipped.length} skipped`)
+        for (const s of skipped) {
+          console.error(`  - ${s.file}: ${s.name} — ${s.reason}`)
         }
       }
     }
