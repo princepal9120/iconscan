@@ -166,6 +166,11 @@ export const BRAND_TOKENS: ReadonlySet<string> = new Set([
 ])
 
 // Brand slug → real Simple Icons export (react-icons/si).
+// Brand slugs with a verified react-icons/si export (checked against
+// react-icons 5.7.0). Brands simple-icons dropped for trademark reasons —
+// linkedin, slack, microsoft, twilio, skype, amazon/aws — have no entry on
+// purpose: they fall through to the "use an official brand SVG" info path
+// instead of pointing at a nonexistent export.
 export const BRAND_TO_SIMPLE: Record<string, { name: string; library: 'react-icons/si' }> = {
   'twitter': { name: 'SiX', library: 'react-icons/si' },
   'x': { name: 'SiX', library: 'react-icons/si' },
@@ -173,20 +178,14 @@ export const BRAND_TO_SIMPLE: Record<string, { name: string; library: 'react-ico
   'gitlab': { name: 'SiGitlab', library: 'react-icons/si' },
   'bitbucket': { name: 'SiBitbucket', library: 'react-icons/si' },
   'discord': { name: 'SiDiscord', library: 'react-icons/si' },
-  'slack': { name: 'SiSlack', library: 'react-icons/si' },
   'notion': { name: 'SiNotion', library: 'react-icons/si' },
   'figma': { name: 'SiFigma', library: 'react-icons/si' },
   'vercel': { name: 'SiVercel', library: 'react-icons/si' },
   'stripe': { name: 'SiStripe', library: 'react-icons/si' },
-  'twilio': { name: 'SiTwilio', library: 'react-icons/si' },
-  'aws': { name: 'SiAmazonaws', library: 'react-icons/si' },
-  'amazon': { name: 'SiAmazon', library: 'react-icons/si' },
   'google': { name: 'SiGoogle', library: 'react-icons/si' },
   'apple': { name: 'SiApple', library: 'react-icons/si' },
-  'microsoft': { name: 'SiMicrosoft', library: 'react-icons/si' },
   'meta': { name: 'SiMeta', library: 'react-icons/si' },
   'facebook': { name: 'SiFacebook', library: 'react-icons/si' },
-  'linkedin': { name: 'SiLinkedin', library: 'react-icons/si' },
   'youtube': { name: 'SiYoutube', library: 'react-icons/si' },
   'instagram': { name: 'SiInstagram', library: 'react-icons/si' },
   'tiktok': { name: 'SiTiktok', library: 'react-icons/si' },
@@ -196,7 +195,6 @@ export const BRAND_TO_SIMPLE: Record<string, { name: string; library: 'react-ico
   'airbnb': { name: 'SiAirbnb', library: 'react-icons/si' },
   'shopify': { name: 'SiShopify', library: 'react-icons/si' },
   'zoom': { name: 'SiZoom', library: 'react-icons/si' },
-  'skype': { name: 'SiSkype', library: 'react-icons/si' },
   'telegram': { name: 'SiTelegram', library: 'react-icons/si' },
   'whatsapp': { name: 'SiWhatsapp', library: 'react-icons/si' },
   'signal': { name: 'SiSignal', library: 'react-icons/si' },
