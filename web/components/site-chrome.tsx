@@ -25,11 +25,11 @@ export function SiteNav() {
           className="flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
         >
           <Github size={15} />
-          star
+          <span className="hidden sm:inline">star</span>
         </a>
         <a
           href="https://github.com/sponsors/princepal9120"
-          className="flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
+          className="hidden items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground sm:flex"
         >
           <Heart size={15} />
           Sponsor
