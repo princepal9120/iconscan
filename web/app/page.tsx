@@ -1,51 +1,14 @@
-import Link from "next/link";
-import {
-  ArrowRight,
-  Github,
-  Heart,
-  ScanSearch,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { CommandBox } from "@/components/command-box";
-import { ThemeToggle } from "@/components/theme-toggle";
-
-const REPO = "https://github.com/princepal9120/iconscan";
+import { Cta, Features, Steps, TerminalDemo } from "@/components/sections";
+import { REPO, SiteFooter, SiteNav } from "@/components/site-chrome";
 
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="mx-auto flex w-full max-w-5xl items-center gap-6 px-6 py-5">
-        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <ScanSearch size={18} />
-          iconscan
-        </Link>
-        <nav className="flex items-center gap-5 text-sm font-medium">
-          <a href={`${REPO}#readme`} className="transition-colors hover:text-muted">
-            DOCS
-          </a>
-          <a href={`${REPO}/pulls`} className="transition-colors hover:text-muted">
-            CHANGELOG
-          </a>
-        </nav>
-        <div className="ml-auto flex items-center gap-2">
-          <a
-            href={REPO}
-            className="flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
-          >
-            <Github size={15} />
-            star
-          </a>
-          <a
-            href="https://github.com/sponsors/princepal9120"
-            className="flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
-          >
-            <Heart size={15} />
-            Sponsor
-          </a>
-          <ThemeToggle />
-        </div>
-      </header>
+      <SiteNav />
 
-      <main className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+      <main className="flex flex-1 flex-col items-center px-6 pt-16 text-center">
         <a
           href={`${REPO}/releases`}
           className="mb-8 rounded-full border border-border px-3 py-1 font-mono text-xs text-muted transition-colors hover:text-foreground"
@@ -95,22 +58,12 @@ export default function Home() {
         <CommandBox />
       </main>
 
-      <footer className="mx-auto flex w-full max-w-5xl items-center px-6 py-5 text-sm text-muted">
-        <span>
-          Made by{" "}
-          <a href="https://github.com/princepal9120" className="underline underline-offset-4">
-            princepal9120
-          </a>
-        </span>
-        <nav className="ml-auto flex items-center gap-4">
-          <a href={`${REPO}/graphs/contributors`} className="transition-colors hover:text-foreground">
-            Contributors
-          </a>
-          <a href={`${REPO}/blob/main/LICENSE`} className="transition-colors hover:text-foreground">
-            License
-          </a>
-        </nav>
-      </footer>
+      <Features />
+      <TerminalDemo />
+      <Steps />
+      <Cta />
+
+      <SiteFooter />
     </div>
   );
 }
