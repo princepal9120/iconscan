@@ -3,6 +3,7 @@
 // stdout contract: only the report (pretty/json/md) and the --prompt handoff.
 // All status, progress and diagnostic output goes to stderr.
 import { Command } from 'commander'
+import fs from 'fs'
 import path from 'path'
 import pkg from '../package.json'
 import { scanProject } from './scanner.js'
@@ -64,6 +65,12 @@ Examples:
     }
 
     const rootPath = path.resolve(targetPath)
+    // A path that isn't a directory (typo'd or empty) must fail loudly —
+    // otherwise CI reads "score 100" on a scan of nothing.
+    if (!fs.existsSync(rootPath) || !fs.statSync(rootPath).isDirectory()) {
+      console.error(`error: '${targetPath}' is not a directory`)
+      process.exit(2)
+    }
     const options: ScanOptions = {
       path: rootPath,
       format: opts.format as ScanOptions['format'],

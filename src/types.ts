@@ -72,5 +72,6 @@ export interface LibraryDef {
   name: string
   pattern: string          // exact package name or prefix, e.g. 'lucide-react', '@heroicons/react', 'react-icons'
   isBrandSafe?: boolean    // exports real brand icons (react-icons/*, @fortawesome/*)
+  removedBrandIcons?: boolean // purged brand icons upstream (lucide, heroicons) — brand imports there are deprecated
   betterAlternatives?: string[]
 }

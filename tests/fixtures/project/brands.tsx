@@ -1,4 +1,5 @@
 import { FaTwitter } from 'react-icons/fa'
+import { GitHub } from '@mui/icons-material'
 import { Twitter, X, ZoomIn, ZoomOut, Apple, Signal } from 'lucide-react'
 import XLogo from './XLogo'
 import GoogleIcon from './GoogleIcon'
@@ -11,6 +12,7 @@ export function Socials() {
   return (
     <div>
       <FaTwitter />
+      <GitHub />
       <Twitter />
       <X />
       <ZoomIn />

@@ -36,6 +36,12 @@ describe('cli e2e', () => {
     assert.ok(Array.isArray(report.issues))
   })
 
+  test('a nonexistent path exits 2 instead of a silent green scan', () => {
+    const res = run([path.join(REPO, 'does-not-exist')])
+    assert.equal(res.status, 2)
+    assert.match(res.stderr, /is not a directory/)
+  })
+
   test('--format bogus exits 2 with a usage error', () => {
     const res = run([PROJECT, '--format', 'bogus'])
     assert.equal(res.status, 2)

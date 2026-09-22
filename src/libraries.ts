@@ -5,11 +5,13 @@ export const KNOWN_LIBRARIES: LibraryDef[] = [
   {
     name: 'lucide-react',
     pattern: 'lucide-react',
+    removedBrandIcons: true,
     betterAlternatives: ['@tabler/icons-react', '@phosphor-icons/react']
   },
   {
     name: '@heroicons/react',
     pattern: '@heroicons/react',
+    removedBrandIcons: true,
     betterAlternatives: ['lucide-react', '@phosphor-icons/react']
   },
   {

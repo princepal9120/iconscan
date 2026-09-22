@@ -69,3 +69,34 @@ describe('fix', () => {
     assert.ok(!fs.existsSync(path.join(tmp, 'fixable.tsx.iconscan.bak')))
   })
 })
+
+const TYPED_SRC = fileURLToPath(new URL('./fixtures/typed', import.meta.url))
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+
+describe('fix — type imports', () => {
+  // replace-icon fixes need the target lib installed, so the copy must live
+  // under the repo root for createRequire to find node_modules.
+  test('decl-level `import type` rename does not emit `type type`', async () => {
+    const tmp = fs.mkdtempSync(path.join(REPO_ROOT, 'tests', '.tmp-typed-'))
+    try {
+      fs.cpSync(TYPED_SRC, tmp, { recursive: true })
+      const { refs } = await scanProject(tmp)
+      const { issues } = analyze(refs)
+      const res = applyFixes(tmp, issues)
+      assert.ok(res.applied >= 2, `expected both renames applied, got ${res.applied}`)
+      const out = fs.readFileSync(path.join(tmp, 'typed.tsx'), 'utf-8')
+      assert.ok(!/type\s+type\b/.test(out), `double type marker emitted:\n${out}`)
+      // renames move to the new lib: decl-level `import type` lands as a
+      // plain import, spec-level keeps its `type` marker.
+      assert.match(out, /import\s*\{\s*SiX\s*\}\s*from\s*'react-icons\/si'/)
+      assert.match(out, /import\s+type\s*\{\s*SiGithub\s*\}\s*from\s*'react-icons\/si'/)
+      assert.match(out, /import\s*\{\s*Check\s*\}\s*from\s*'lucide-react'/)
+      assert.ok(out.includes('const t: SiX'))
+      // backups + rollback still work for the mutated file
+      const { restored } = restoreBackups(tmp)
+      assert.ok(restored >= 1)
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+})

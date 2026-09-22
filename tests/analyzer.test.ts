@@ -94,6 +94,14 @@ describe('analyzer', () => {
     })
   })
 
+  test('brand icon from a lib that still ships brands stays info-only', () => {
+    const gh = brands().find(i => i.message.includes("'GitHub'"))
+    assert.ok(gh)
+    assert.equal(gh.severity, 'info')
+    assert.ok(gh.message.includes('@mui/icons-material'))
+    assert.equal(gh.fix, undefined)
+  })
+
   test('AwesomeWidget does not match the aws brand token', () => {
     assert.equal(issues.filter(i => i.message.includes('AwesomeWidget')).length, 0)
   })
@@ -128,13 +136,13 @@ describe('analyzer', () => {
         `unexpected brand-icon issue for ${name}`
       )
     }
-    assert.equal(stats.brandIcons, 4) // only FaTwitter, Twitter, XLogo, GoogleIcon
+    assert.equal(stats.brandIcons, 5) // FaTwitter, GitHub, Twitter, XLogo, GoogleIcon
   })
 
   test('function imports are not icon candidates at all', () => {
     assert.equal(issues.filter(i => i.message.includes('sendSlackMessage')).length, 0)
-    // stats count only icon-relevant imports: 27, not the 30 raw import refs
-    assert.equal(stats.totalIcons, 27)
+    // stats count only icon-relevant imports: 28, not the 31 raw import refs
+    assert.equal(stats.totalIcons, 28)
   })
 
   test('local XLogo/GoogleIcon components get verify-official info issues', () => {
@@ -152,12 +160,12 @@ describe('analyzer', () => {
   })
 
   test('stats reflect the whole project', () => {
-    assert.equal(stats.totalIcons, 27)
-    assert.equal(stats.uniqueIcons, 24)
-    assert.equal(stats.usedIcons, 22)
+    assert.equal(stats.totalIcons, 28)
+    assert.equal(stats.uniqueIcons, 25)
+    assert.equal(stats.usedIcons, 23)
     assert.equal(stats.deadIcons, 5)
     assert.equal(stats.duplicateIcons, 1)
     assert.equal(stats.genericIcons, 2)
-    assert.equal(stats.brandIcons, 4)
+    assert.equal(stats.brandIcons, 5)
   })
 })

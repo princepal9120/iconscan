@@ -139,7 +139,10 @@ export function analyze(refs: IconRef[]): { issues: IconIssue[]; stats: AnalyzeS
         file: imp.file,
         line: imp.line
       })
-    } else {
+    } else if (lib?.removedBrandIcons) {
+      // Only libraries that actually purged brand icons (lucide, heroicons)
+      // get the warning + autofix — libs that still ship brands (mui,
+      // tabler, feather, phosphor) stay on the verify-official info path.
       const simple = BRAND_TO_SIMPLE[slug]
       if (simple) {
         issues.push({
@@ -164,6 +167,14 @@ export function analyze(refs: IconRef[]): { issues: IconIssue[]; stats: AnalyzeS
           line: imp.line
         })
       }
+    } else {
+      issues.push({
+        severity: 'info',
+        rule: 'brand-icon',
+        message: `Brand icon '${imp.name}' from ${imp.source} — verify it renders the official current brand asset`,
+        file: imp.file,
+        line: imp.line
+      })
     }
   }
 

@@ -395,9 +395,9 @@ function processFile(
       continue
     }
 
-    const isType =
-      declPath.node.importKind === 'type' ||
-      (spec.type === 'ImportSpecifier' && spec.importKind === 'type')
+    // Spec-level only: decl-level `import type { X }` renames splice just the
+    // name (adding `type` would emit `import type { type X }`).
+    const isType = spec.type === 'ImportSpecifier' && spec.importKind === 'type'
     const specText = isType ? `type ${newName}` : newName
 
     // newName must not collide with a binding already visible — at a renamed
